@@ -1,0 +1,12 @@
+{
+    "best_trial_number": 93,
+    "best_params": {
+        "batch_size": 16,
+        "learning_rate": 0.0001694841438362755,
+        "weight_decay": 0.0006531754995659995,
+        "num_layers": 6,
+        "kernel_size": 15,
+        "start_channels": 8
+    },
+    "best_value": 0.00011084989730392181
+}
