@@ -1,41 +1,41 @@
 
-# Masterarbeit – Unüberwachte Domain Adaptation für die Verschleißüberwachung in Stanzprozessen
+# Masterarbeit – Unsupervised Domain Adaptation zur Verschleißüberwachung in Stanzprozessen
 
-本项目我的硕士论文的代码部分， in dieser Thesis solluntersucht werden wie über unüberwachte Domain Adapation Methoden ungelabelte Datensätze für die Modellbildung eingesetzt werden können. Ziel ist es Methoden zu recherchieren und zu implementieren, die es ermöglichen pseudo labels zu generieren um die Datensätze mit künstlichen Zielgrößen für das überwachte lernen nutzbar zu machen. 
+Dies ist der Code-Teil meiner Masterarbeit. In dieser Arbeit wird untersucht, wie unüberwachte Domain-Adaptation-Methoden genutzt werden können, um ungelabelte Datensätze für die Modellbildung einzusetzen. Ziel ist es, Methoden zu erforschen und zu implementieren, die die Generierung von Pseudo-Labels ermöglichen, um die Datensätze mit künstlichen Zielgrößen für überwachtes Lernen nutzbar zu machen.
 
 ---
 
-## 📁 项目结构
+## 📁 Projektstruktur
 
 ```
 .
 ├── baseline/
-│   ├── model/                    # 模型训练与测试脚本（.py 和 .ipynb）
+│   ├── model/             # Trainings- und Testskripte für Modelle (.py und .ipynb)
 ├── configs/
-│   └── default.yaml             # 超参数配置文件
+│   └── default.yaml             # Konfigurationsdatei für Hyperparameter
 │
-├── datasets/                    # 数据集目录（需自行放置）
+├── datasets/                    # Datensatzverzeichnis (manuell hinzufügen)
 │
-├── models/                      # 模型定义目录（包含 Flexible_CNN）
+├── models/                      # Modellarchitekturen (z.B. Flexible_CNN)
 │
-├── preprocessing/               # 数据
+├── preprocessing/               # Datenvorverarbeitung
 │
 ├── utils/
-│   ├── train_utils.py           # 在训练中的辅助函数封装
+│   ├── train_utils.py           # Hilfsfunktionen für das Training
 │
-├── data_preprocessing.py       # 生成数据地址的文本代码
-├── outliers.py                 # 异常值处理
-├── requirements.txt            # Python 依赖列表
-└── README.md                   # 本说明文档
+├── data_preprocessing.py       # Skript zur Erstellung von Datenpfad-Textdateien
+├── outliers.py                 # Ausreißerbehandlung
+├── requirements.txt            # Abhängigkeiten für Python
+└── README.md                   # Diese Dokumentation
 ```
 
 ---
 
-## 快速开始
+## 🚀 Schnellstart
 
-### 1. 安装依赖
+### 1. Abhängigkeiten installieren
 
-建议使用虚拟环境：
+Virtuelle Umgebung empfohlen:
 
 ```bash
 pip install -r requirements.txt
@@ -43,62 +43,61 @@ pip install -r requirements.txt
 
 ---
 
-### 2. 准备数据
+### 2. Daten vorbereiten
 
-通过 data_preprocessing.py 将datasets中的数据文件地址 放入 `datasets/source/` 中：
+Nutze `data_preprocessing.py`, um Datenpfade aus `datasets` nach `datasets/source/` zu generieren:
 
-- 训练集：`train/DC_T197_RP.txt`
-- 验证集：`validation/HC_T197_RP.txt`
-- 测试集：`test/DC_T197_RP.txt`（用于 baseline_test）
+- Trainingsdaten: `train/DC_T197_RP.txt`
+- Validierungsdaten: `validation/HC_T197_RP.txt`
+- Testdaten: `test/DC_T197_RP.txt` (für `baseline_test`)
 
 ---
 
-### 3. 模型训练
+### 3. Modelltraining
 
-运行：
+Ausführen:
 
 ```bash
 python baseline/baseline.py
 ```
 
-功能：
-- 读取配置文件（`configs/default.yaml`）
-- 使用 Flexible_CNN 模型进行训练
-- 自动保存最佳模型至 `model/best_model.pth`
+Funktionen:
+- Liest Konfiguration aus `configs/default.yaml`
+- Trainiert das Flexible_CNN-Modell
+- Speichert das beste Modell nach `model/best_model.pth`
 
 ---
 
-### 4. 模型测试
+### 4. Modelltest
 
-运行：
+Ausführen:
 
 ```bash
 python baseline/baseline_test.py
 ```
 
-输出将显示：
+Ausgabe:
 - Test Loss
 - Test Accuracy
-
-------
-
-### 5.进行各种domain adaptation的训练（未完成）
-
-运行：
-
-```bash
-
-```
-
-输出将显示：
-
-- Test Loss
-- Test Accuracy
-- 提升值
 
 ---
 
-## 🔧 配置文件说明（configs/default.yaml）
+### 5. Domain Adaptation Training (in Arbeit)
+
+Ausführen:
+
+```bash
+# wird noch ergänzt
+```
+
+Ausgabe:
+- Test Loss
+- Test Accuracy
+- Performanceverbesserung
+
+---
+
+## 🔧 Konfigurationsdatei (configs/default.yaml)
 
 ```yaml
 baseline:
@@ -114,22 +113,18 @@ baseline:
 
 ---
 
-## 📦 模型结构
+## 📦 Modellarchitektur
 
-- 模型定义位于 `models`
-- 参数可调：卷积层数、起始通道数、核大小、激活函数等
+- Modell befindet sich in `models`
+- Parameter anpassbar: Anzahl der Convolution-Layers, Startkanäle, Kernelgröße, Aktivierungsfunktionen
 
 ---
 
 ## ✅ TODO
 
-- [ ] 增加多模型比较模块
-- [ ] 支持 TensorBoard 可视化
-- [ ] 输出混淆矩阵
-- [ ] 变换数据类型（可做选择）
+- [ ] Vergleich mehrerer Modelle
+- [ ] TensorBoard-Integration
+- [ ] Confusion Matrix-Ausgabe
+- [ ] Flexible Daten-Typumwandlung
 
----
 
-## 📄 License
-
-本项目仅用于学术研究目的。如有使用请注明来源。
