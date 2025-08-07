@@ -31,7 +31,7 @@ Dies ist der Code-Teil meiner Masterarbeit. In dieser Arbeit wird untersucht, wi
 
 ---
 
-## 🚀 Schnellstart
+## Schnellstart
 
 ### 1. Abhängigkeiten installieren
 
@@ -97,7 +97,7 @@ Ausgabe:
 
 ---
 
-## 🔧 Konfigurationsdatei (configs/default.yaml)
+## Konfigurationsdatei (configs/default.yaml)
 
 ```yaml
 baseline:
@@ -113,14 +113,14 @@ baseline:
 
 ---
 
-## 📦 Modellarchitektur
+## Modellarchitektur
 
 - Modell befindet sich in `models`
 - Parameter anpassbar: Anzahl der Convolution-Layers, Startkanäle, Kernelgröße, Aktivierungsfunktionen
 
 ---
 
-## ✅ TODO
+## TODO
 
 - [ ] Vergleich mehrerer Modelle
 - [ ] TensorBoard-Integration
