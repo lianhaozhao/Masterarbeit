@@ -6,4 +6,4 @@ baseline:
   kernel_size: 15
   start_channels: 8
   num_epochs: 30
-  early_stopping_patience: 3
+  early_stopping_patience: 5
