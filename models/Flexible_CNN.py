@@ -66,5 +66,23 @@ class Flexible_CNN(nn.Module):
             return out
 
 
+def freeze_feature_train_head(model, lr, weight_decay):
+    """
+        Freezes the feature extractor and returns an optimizer for training only the classifier head.
+
+        Args:
+            model (nn.Module): The model with 'feature_extractor' and 'classifier' attributes.
+            lr (float): Learning rate for the optimizer.
+            weight_decay (float): Weight decay (L2 regularization).
+
+        Returns:
+            torch.optim.Optimizer: Optimizer for the classifier parameters only.
+        """
+    for param in model.feature_extractor.parameters():
+        param.requires_grad = False
+    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=lr, weight_decay=weight_decay)
+    return optimizer
+
+
 
 
