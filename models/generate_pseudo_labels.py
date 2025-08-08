@@ -54,3 +54,48 @@ def generate_pseudo_labels(model, target_loader, device, threshold=0.9):
     print(f"Number of pseudo-labeled samples: {len(pseudo_data)}")
 
     return pseudo_data, pseudo_labels
+
+
+
+def generate_soft_pseudo_labels(model, target_loader, device, threshold=0.9):
+    """
+    Generate soft pseudo-labels for unlabeled target data using model predictions.
+
+    Parameters:
+        model (nn.Module): Trained model for generating pseudo-labels.
+        target_loader (DataLoader): Dataloader for unlabeled target domain data.
+        threshold (float): Confidence threshold for accepting a pseudo-label.
+
+    Returns:
+        pseudo_data (Tensor): Inputs with confidence above threshold.
+        pseudo_probs (Tensor): Corresponding soft labels (probability distributions).
+    """
+    model.eval()
+    pseudo_data = []
+    pseudo_probs = []
+
+    with torch.no_grad():
+        for inputs in target_loader:
+            if isinstance(inputs, (tuple, list)):
+                inputs = inputs[0]
+
+            inputs = inputs.to(device)
+            logits = model(inputs)
+            probs = F.softmax(logits, dim=1)  # Get soft labels
+
+            confidence, _ = torch.max(probs, dim=1)
+            mask = confidence >= threshold
+
+            if mask.any():
+                pseudo_data.append(inputs[mask].cpu())
+                pseudo_probs.append(probs[mask].cpu())
+
+    if pseudo_data and pseudo_probs:
+        pseudo_data = torch.cat(pseudo_data, dim=0)
+        pseudo_probs = torch.cat(pseudo_probs, dim=0)
+    else:
+        pseudo_data = torch.empty(0)
+        pseudo_probs = torch.empty(0)
+
+    print(f"Number of pseudo-labeled samples (soft): {len(pseudo_data)}")
+    return pseudo_data, pseudo_probs

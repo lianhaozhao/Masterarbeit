@@ -2,6 +2,18 @@ import torch
 import torch.nn as nn
 
 class Flexible_CNN_FeatureExtractor(nn.Module):
+    """
+       A flexible 1D CNN feature extractor for time-series or signal data.
+
+       Automatically adjusts output feature dimension based on input length.
+
+       Args:
+           num_layers (int): Number of convolutional layers.
+           start_channels (int): Number of channels in the first conv layer.
+           kernel_size (int): Kernel size for all conv layers.
+           cnn_act (str): Activation function ('relu', 'leakrelu', 'sigmoid', 'tanh').
+           input_size (int): Input sequence length (used to infer output shape).
+       """
     def __init__(self, num_layers=2, start_channels=8,kernel_size=3, cnn_act='leakrelu',input_size=2800):
         super(Flexible_CNN_FeatureExtractor, self).__init__()
 
@@ -38,6 +50,13 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
         return x
 
 class Flexible_CNN_Classifier(nn.Module):
+    """
+       A simple classifier head using a fully connected layer.
+
+       Args:
+           feature_dim (int): Input feature dimension from the CNN.
+           num_classes (int): Number of output classes.
+       """
     def __init__(self, feature_dim, num_classes=10):
         super(Flexible_CNN_Classifier, self).__init__()
         self.fc = nn.Linear(feature_dim, num_classes)
@@ -46,6 +65,16 @@ class Flexible_CNN_Classifier(nn.Module):
         return self.fc(x)
 
 class Flexible_CNN(nn.Module):
+    """
+        A complete CNN model combining the feature extractor and classifier.
+
+        Args:
+            num_layers (int): Number of conv layers in the feature extractor.
+            start_channels (int): Base number of conv channels.
+            kernel_size (int): Kernel size for convolutions.
+            cnn_act (str): Activation function name.
+            num_classes (int): Number of output classes.
+        """
     def __init__(self, num_layers=2, start_channels=8, kernel_size=3, cnn_act='leakrelu', num_classes=10):
         super(Flexible_CNN, self).__init__()
         self.feature_extractor = Flexible_CNN_FeatureExtractor(

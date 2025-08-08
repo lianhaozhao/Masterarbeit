@@ -11,11 +11,15 @@ Dies ist der Code-Teil meiner Masterarbeit. In dieser Arbeit wird untersucht, wi
 .
 ├── baseline/
 │   ├── model/             # Trainings- und Testskripte für Modelle (.py und .ipynb)
+│
 ├── configs/
 │   └── default.yaml             # Konfigurationsdatei für Hyperparameter
 │
 ├── datasets/                    # Datensatzverzeichnis (manuell hinzufügen)
 │
+├── method_pseudo/               # method_pseudo
+│   └── m_pseudo
+│ 
 ├── models/                      # Modellarchitekturen (z.B. Flexible_CNN)
 │
 ├── preprocessing/               # Datenvorverarbeitung
@@ -101,12 +105,12 @@ Ausgabe:
 
 ```yaml
 baseline:
-  batch_size: 64
-  learning_rate: 0.001
-  weight_decay: 0.0001
-  num_layers: 3
-  kernel_size: 3
-  start_channels: 32
+  batch_size: 16
+  learning_rate: 0.0001694841438362755
+  weight_decay: 0.0006531754995659995
+  num_layers: 6
+  kernel_size: 15
+  start_channels: 8
   num_epochs: 30
   early_stopping_patience: 5
 ```

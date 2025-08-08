@@ -18,7 +18,7 @@ if torch.cuda.is_available():
 
 with open("../configs/default.yaml", 'r') as f:
     config = yaml.safe_load(f)['baseline']
-# 提取参数
+# Extract parameters
 batch_size = config['batch_size']
 learning_rate = config['learning_rate']
 weight_decay = config['weight_decay']
@@ -109,6 +109,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
         model.load_state_dict(best_model_state)
 
     return best_val_loss
+
 if __name__ == '__main__':
 
     train_dataset = PKLDataset('../datasets/source/train/DC_T197_RP.txt')

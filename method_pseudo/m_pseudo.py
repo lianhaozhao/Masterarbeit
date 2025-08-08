@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 from models.Flexible_CNN import Flexible_CNN,freeze_feature_train_head
-from models.generate_pseudo_labels import generate_pseudo_labels
+from models.generate_pseudo_labels import generate_pseudo_labels,generate_soft_pseudo_labels
 from PKLDataset import PKLDataset
 from torch.utils.data import DataLoader ,TensorDataset
 import os
 import numpy as np
 import random
 import yaml
-from models.pseudo_train_and_test import pseudo_train_model,pseudo_test_model
+from models.pseudo_train_and_test import pseudo_train_model, pseudo_test_model, pseudo_soft_train_model
 
 seed = 42
 torch.manual_seed(seed)
@@ -88,23 +88,32 @@ if __name__ == '__main__':
     # Get unlabeled data of the target domain
     target_loader = get_target_loader(path= '../datasets/target/train/HC_T185_RP.txt',batch_size=batch_size)
 
-    # Using a pseudo-label generator
-    pseudo_data, pseudo_labels = generate_pseudo_labels(model, target_loader, device, threshold=0.9)
+    # Using a pseudo-soft label generator
+    # pseudo_data, pseudo_labels = generate_pseudo_labels(model, target_loader, device, threshold=0.9)
 
+    # pseudo_data, pseudo_probs = generate_soft_pseudo_labels(model, target_loader, device)
+    # pseudo_dataset = TensorDataset(pseudo_data, pseudo_probs)
+    # pseudo_loader = DataLoader(pseudo_dataset, batch_size=64, shuffle=True)
+
+    # Using a pseudo-hard label generator
+    pseudo_data, pseudo_labels = generate_pseudo_labels(model, target_loader, device, threshold=0.95)
     # Wrap as a Dataset
     pseudo_dataset = TensorDataset(pseudo_data, pseudo_labels)
     # Convert to DataLoader (can be used for training)
     pseudo_loader = DataLoader(pseudo_dataset, batch_size=batch_size, shuffle=True)
 
     criterion = nn.CrossEntropyLoss()
-    # Freeze feature extraction layer parameters
-    optimizer = freeze_feature_train_head(model, learning_rate, weight_decay)
+    # # Freeze feature extraction layer parameters
+    #
+    # optimizer = freeze_feature_train_head(model, learning_rate, weight_decay)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='min', factor=0.7, patience=3
     )
     model,best_val_loss= pseudo_train_model(
-            model, pseudo_loader, optimizer, criterion, device,
+            model, pseudo_loader, optimizer,criterion, device,
             num_epochs=num_epochs, early_stopping_patience=early_stopping_patience,scheduler=scheduler,out_path=out_path
         )
     pseudo_test_dataset = PKLDataset('../datasets/target/test/HC_T185_RP.txt')

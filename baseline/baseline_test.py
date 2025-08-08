@@ -6,16 +6,8 @@ from models.Flexible_CNN import Flexible_CNN
 from PKLDataset import PKLDataset
 from torch.utils.data import DataLoader
 import yaml
-import random
 from tqdm import tqdm
 
-# 设置随机种子
-seed = 42
-torch.manual_seed(seed)
-np.random.seed(seed)
-random.seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
 
 # 加载配置
 with open("../configs/default.yaml", 'r') as f:
@@ -28,7 +20,7 @@ start_channels = config['start_channels']
 
 # 设置设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-file = ['../datasets/HC_T197_RP.txt','../datasets/HC_T194_RP.txt','../datasets/HC_T191_RP.txt','../datasets/HC_T188_RP.txt','../datasets/HC_T185_RP.txt']
+file = ['../datasets/target/test/HC_T185_RP.txt']
 for item in file:
     # 加载测试数据
     test_dataset = PKLDataset(item)
