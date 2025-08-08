@@ -53,8 +53,8 @@ def get_target_loader(path=None, batch_size=batch_size):
 def iterative_pseudo_label_training(
     model,
     target_txt_path,
-    generate_fn,
-    train_fn,
+    generate_pseudo_labels,
+    pseudo_train_model,
     optimizer,
     criterion,
     device,
@@ -73,7 +73,7 @@ def iterative_pseudo_label_training(
         target_loader = get_target_loader(path=target_txt_path, batch_size=batch_size)
 
         # generate pseudo-labels
-        pseudo_data, pseudo_labels = generate_fn(model, target_loader, device, threshold=threshold)
+        pseudo_data, pseudo_labels = generate_pseudo_labels(model, target_loader, device, threshold=threshold)
         if pseudo_data.shape[0] == 0:
             print("No pseudo-labels with sufficient confidence. Skipping.")
             break
@@ -82,7 +82,7 @@ def iterative_pseudo_label_training(
         pseudo_loader = DataLoader(pseudo_dataset, batch_size=batch_size, shuffle=True)
 
         # Train on pseudo-labeled data
-        model, best_loss = train_fn(
+        model, best_loss = pseudo_train_model(
             model=model,
             pseudo_loader=pseudo_loader,
             optimizer=optimizer,
@@ -99,7 +99,6 @@ def iterative_pseudo_label_training(
 
     return model
 
-# --------------------------- Main ---------------------------
 if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = Flexible_CNN(
@@ -127,8 +126,8 @@ if __name__ == '__main__':
     model = iterative_pseudo_label_training(
         model=model,
         target_txt_path='../datasets/target/train/HC_T185_RP.txt',
-        generate_fn=generate_pseudo_labels,
-        train_fn=pseudo_train_model,
+        generate_pseudo_labels=generate_pseudo_labels,
+        pseudo_train_model=pseudo_train_model,
         optimizer=optimizer,
         criterion=criterion,
         scheduler=scheduler,
