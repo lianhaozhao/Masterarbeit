@@ -20,7 +20,7 @@ start_channels = config['start_channels']
 
 # 设置设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-file = ['../datasets/target/test/HC_T185_RP.txt']
+file = ['../datasets/DC_T185_RP.txt']
 for item in file:
     # 加载测试数据
     test_dataset = PKLDataset(item)

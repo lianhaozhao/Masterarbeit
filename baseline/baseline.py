@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 import yaml
 import random
 from tqdm import tqdm
-
+from n_PKLDataset import N_PKLDataset,fit_normalizer_from_txt
 seed = 42
 torch.manual_seed(seed)
 np.random.seed(seed)
@@ -44,6 +44,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
         for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1} Training"):
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
+            outputs = outputs[0] if isinstance(outputs, tuple) else outputs
             loss = criterion(outputs, labels)
 
             optimizer.zero_grad()
@@ -100,7 +101,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
         else:
             patience_counter += 1
             print(f"Patience Counter: {patience_counter}/{early_stopping_patience}")
-            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.4:
+            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.3:
                 print(f"Early stopping at epoch {epoch + 1}.")
                 break
 
@@ -127,7 +128,7 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.7, patience=3
+        optimizer, mode='min', factor=0.7, patience=5
     )
     best_val_loss= train_model(
             model, train_loader, val_loader, optimizer, criterion, device,

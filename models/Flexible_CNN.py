@@ -57,12 +57,21 @@ class Flexible_CNN_Classifier(nn.Module):
            feature_dim (int): Input feature dimension from the CNN.
            num_classes (int): Number of output classes.
        """
-    def __init__(self, feature_dim, num_classes=10):
-        super(Flexible_CNN_Classifier, self).__init__()
-        self.fc = nn.Linear(feature_dim, num_classes)
+
+    def __init__(self, feature_dim, num_classes=10, hidden=512, p=0.2):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(feature_dim, hidden),
+            nn.BatchNorm1d(hidden),
+            nn.LeakyReLU(0.01, inplace=True),
+            nn.Dropout(p),
+            nn.Linear(hidden, num_classes)
+        )
 
     def forward(self, x):
-        return self.fc(x)
+        return self.net(x)
+
+
 
 class Flexible_CNN(nn.Module):
     """
@@ -75,13 +84,14 @@ class Flexible_CNN(nn.Module):
             cnn_act (str): Activation function name.
             num_classes (int): Number of output classes.
         """
-    def __init__(self, num_layers=2, start_channels=8, kernel_size=3, cnn_act='leakrelu', num_classes=10):
+    def __init__(self, num_layers=2, start_channels=8, kernel_size=3, cnn_act='leakrelu', num_classes=10,input_size=2800):
         super(Flexible_CNN, self).__init__()
         self.feature_extractor = Flexible_CNN_FeatureExtractor(
             num_layers=num_layers,
             start_channels=start_channels,
             cnn_act=cnn_act,
-            kernel_size=kernel_size
+            kernel_size=kernel_size,
+            input_size=input_size
         )
         feature_dim = self.feature_extractor.feature_dim
         self.classifier = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes)
@@ -109,6 +119,7 @@ def freeze_feature_train_head(model, lr, weight_decay):
         """
     for param in model.feature_extractor.parameters():
         param.requires_grad = False
+    model.feature_extractor.eval()
     optimizer = torch.optim.Adam(model.classifier.parameters(), lr=lr, weight_decay=weight_decay)
     return optimizer
 

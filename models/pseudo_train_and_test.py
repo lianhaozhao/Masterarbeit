@@ -2,6 +2,7 @@ import torch
 import os
 from tqdm import tqdm
 import torch.nn.functional as F
+import copy
 
 def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
                 num_epochs=20, early_stopping_patience=3, scheduler=None, out_path=None):
@@ -24,7 +25,7 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
             best_val_loss (float): Lowest training loss achieved during training.
         """
 
-    best_val_loss = float('inf')
+    best_train_loss = float('inf')
     patience_counter = 0
     best_model_state = None
 
@@ -37,7 +38,7 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
 
         for inputs, labels in tqdm(pseudo_loader, desc=f"Epoch {epoch+1} Training"):
             inputs, labels = inputs.to(device), labels.to(device)
-            outputs = model(inputs)
+            outputs = outputs[0] if isinstance(outputs, tuple) else outputs
             loss = criterion(outputs, labels)
 
 
@@ -64,10 +65,10 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
               f"- Train Loss: {train_loss:.6f}, Acc: {train_accuracy:.4f} "
              )
 
-        if train_loss < best_val_loss:
-            best_val_loss = train_loss
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
             patience_counter = 0
-            best_model_state = model.state_dict()
+            best_model_state = copy.deepcopy(model.state_dict())
         else:
             patience_counter += 1
             print(f"Patience Counter: {patience_counter}/{early_stopping_patience}")
@@ -80,7 +81,7 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
         torch.save(best_model_state, os.path.join(out_path, 'best_model.pth'))
         model.load_state_dict(best_model_state)
 
-    return model,best_val_loss
+    return model,best_train_loss
 def pseudo_test_model(model, criterion, pseudo_test_loader, device):
     """
         Evaluates the model on a labeled test set using standard classification metrics.
@@ -185,11 +186,11 @@ def pseudo_soft_train_model(model, pseudo_loader,optimizer, device,
         if train_loss < best_val_loss:
             best_val_loss = train_loss
             patience_counter = 0
-            best_model_state = model.state_dict()
+            best_model_state = copy.deepcopy(model.state_dict())
         else:
             patience_counter += 1
             print(f"Patience Counter: {patience_counter}/{early_stopping_patience}")
-            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.4:
+            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.3:
                 print(f"Early stopping at epoch {epoch + 1}.")
                 break
 

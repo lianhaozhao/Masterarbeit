@@ -17,6 +17,7 @@ def hyper_train_model(model, train_loader, val_loader, optimizer, criterion, dev
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
+            outputs = outputs[0] if isinstance(outputs, tuple) else outputs
             loss = criterion(outputs, labels)
 
             optimizer.zero_grad()
@@ -31,7 +32,8 @@ def hyper_train_model(model, train_loader, val_loader, optimizer, criterion, dev
         with torch.no_grad():
             for inputs, labels in val_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
-                outputs = model(inputs)[0] if isinstance(model(inputs), tuple) else model(inputs)
+                outputs = model(inputs)
+                outputs = outputs[0] if isinstance(outputs, tuple) else outputs
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
 
@@ -39,11 +41,10 @@ def hyper_train_model(model, train_loader, val_loader, optimizer, criterion, dev
 
         if scheduler is not None:
             scheduler.step(val_loss)
-        trial.report(val_loss, epoch)
-
-        # 如果表现太差，Optuna 会提前停止这个 trial
-        if trial.should_prune():
-            raise optuna.TrialPruned()
+        if trial is not None:
+            trial.report(val_loss, epoch)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
 
         if (epoch+1) % 5 == 0:
             print(f"Epoch [{epoch + 1}/{num_epochs}] - Train Loss: {train_loss:.6f} - Val Loss: {val_loss:.6f}")
