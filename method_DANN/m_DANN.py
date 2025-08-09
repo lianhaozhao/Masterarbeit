@@ -113,7 +113,7 @@ if __name__ == '__main__':
     print("[INFO] Starting standard DANN training (no pseudo labels)...")
     train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
-               device, num_epochs=30, lambda_=0.5)
+               device, num_epochs=20, lambda_=0.5)
 
     print("[INFO] Evaluating on target test set...")
     test_dataset = PKLDataset(target_test_path)

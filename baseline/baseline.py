@@ -106,7 +106,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
                 break
 
     if best_model_state is not None:
-        torch.save(best_model_state, os.path.join(out_path, 'best_model.pth'))
+        torch.save(best_model_state, os.path.join(out_path, 'test_best_model.pth'))
         model.load_state_dict(best_model_state)
 
     return best_val_loss

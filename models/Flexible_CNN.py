@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 class Flexible_CNN_FeatureExtractor(nn.Module):
     """
@@ -49,27 +50,48 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
         x = x.view(x.size(0), -1)  # 展平为 (B, C)
         return x
 
+
+
 class Flexible_CNN_Classifier(nn.Module):
     """
-       A simple classifier head using a fully connected layer.
+    Flexible CNN classifier head with LayerNorm + Cosine similarity classifier.
 
-       Args:
-           feature_dim (int): Input feature dimension from the CNN.
-           num_classes (int): Number of output classes.
-       """
-
-    def __init__(self, feature_dim, num_classes=10, hidden=512, p=0.2):
+    Args:
+        feature_dim (int): Input feature dimension from CNN backbone.
+        num_classes (int): Number of output classes.
+        hidden (int): Hidden layer dimension.
+        p (float): Dropout probability.
+        temperature (float): Scaling factor for cosine logits.
+    """
+    def __init__(self, feature_dim, num_classes=10, hidden=512, p=0.2, temperature=0.05):
         super().__init__()
-        self.net = nn.Sequential(
+        self.temperature = temperature
+
+        # 特征投影层：Linear -> LayerNorm -> 激活 -> Dropout
+        self.feat_proj = nn.Sequential(
             nn.Linear(feature_dim, hidden),
-            nn.BatchNorm1d(hidden),
+            nn.LayerNorm(hidden),
             nn.LeakyReLU(0.01, inplace=True),
-            nn.Dropout(p),
-            nn.Linear(hidden, num_classes)
+            nn.Dropout(p)
         )
 
-    def forward(self, x):
-        return self.net(x)
+        # Cosine classifier 的权重
+        self.weight = nn.Parameter(torch.Tensor(num_classes, hidden))
+        nn.init.xavier_normal_(self.weight)  # 初始化
+
+    def forward(self, x, return_feat=False):
+        # 投影特征
+        z = self.feat_proj(x)
+
+        # Cosine 相似度分类器
+        z_norm = F.normalize(z, dim=1)          # 特征归一化
+        w_norm = F.normalize(self.weight, dim=1) # 权重归一化
+        logits = (z_norm @ w_norm.t()) / self.temperature
+
+        if return_feat:
+            return logits, z
+        return logits
+
 
 
 
