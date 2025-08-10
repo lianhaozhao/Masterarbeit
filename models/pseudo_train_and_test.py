@@ -38,6 +38,7 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
 
         for inputs, labels in tqdm(pseudo_loader, desc=f"Epoch {epoch+1} Training"):
             inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
             outputs = outputs[0] if isinstance(outputs, tuple) else outputs
             loss = criterion(outputs, labels)
 
@@ -72,7 +73,7 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
         else:
             patience_counter += 1
             print(f"Patience Counter: {patience_counter}/{early_stopping_patience}")
-            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.4:
+            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.3:
                 print(f"Early stopping at epoch {epoch + 1}.")
                 break
 

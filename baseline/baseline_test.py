@@ -36,7 +36,7 @@ for item in file:
     ).to(device)
 
     # 加载模型权重
-    model_path = 'model/best_model.pth'
+    model_path = 'model/test_best_model.pth'
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.eval()
 

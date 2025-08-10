@@ -46,12 +46,12 @@ if __name__ == '__main__':
     out_path = "model"
     os.makedirs(out_path, exist_ok=True)
     # The address of the model
-    model_path = '../baseline/model/best_model.pth'
+    model_path = '../baseline/model/test_best_model.pth'
     model.load_state_dict(torch.load(model_path, map_location=device))
     print("[INFO] Model loaded")
 
     # Get unlabeled data of the target domain
-    target_loader = get_target_loader(path= '../datasets/DC_T185_RP.txt',batch_size=batch_size)
+    target_loader = get_target_loader(path= '../datasets/HC_T185_RP.txt',batch_size=batch_size)
 
     # Using a pseudo-soft label generator
     # pseudo_data, pseudo_labels = generate_pseudo_labels(model, target_loader, device, threshold=0.9)
@@ -81,7 +81,7 @@ if __name__ == '__main__':
             model, pseudo_loader, optimizer,criterion, device,
             num_epochs=num_epochs, early_stopping_patience=early_stopping_patience,scheduler=scheduler,out_path=out_path
         )
-    pseudo_test_dataset = PKLDataset('../datasets/DC_T185_RP.txt')
+    pseudo_test_dataset = PKLDataset('../datasets/HC_T185_RP.txt')
     pseudo_test_loader = DataLoader(pseudo_test_dataset, batch_size=batch_size, shuffle=False)
 
     pseudo_test_model(model, criterion, pseudo_test_loader, device)

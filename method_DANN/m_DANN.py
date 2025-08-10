@@ -1,3 +1,5 @@
+import copy
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -23,13 +25,24 @@ def get_dataloaders(source_path, target_path, batch_size):
     target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
     return source_loader, target_loader
 
+def dann_lambda(epoch, num_epochs):
+    """
+    常用的 DANN λ 调度：从 0 平滑升到 1
+    你也可以把 -10 调轻/重来改变上升速度
+    """
+    p = epoch / float(num_epochs)
+    return 2. / (1. + np.exp(-10 * p)) - 1.
+
 def train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
-               device, num_epochs=20, lambda_=0.1):
-    model.train()
+               device, num_epochs=20, lambda_=0.1,scheduler = None):
+    best_gap = 0.5
+    best_model = None
     for epoch in range(num_epochs):
         total_loss, total_cls_loss, total_dom_loss = 0.0, 0.0, 0.0
         dom_correct, dom_total = 0, 0
+        model.train()
+        # lambda_ = dann_lambda(epoch, num_epochs) * lambda_
         for (src_x, src_y), tgt_x in zip(source_loader, target_loader):
             src_x, src_y = src_x.to(device), src_y.to(device)
             tgt_x = tgt_x.to(device)
@@ -56,22 +69,34 @@ def train_dann(model, source_loader, target_loader,
             loss.backward()
             optimizer.step()
 
+
             total_loss += loss.item()
             total_cls_loss += loss_cls.item()
             total_dom_loss += loss_dom.item()
 
         dom_acc = dom_correct / dom_total
         avg_cls_loss = total_cls_loss / len(source_loader)
+        gap = abs(dom_acc - 0.5)
+        if gap < best_gap:
+            best_gap = gap
+            best_model = copy.deepcopy(model)
+        if scheduler is not None:
+            scheduler.step()
 
         print(f"[Epoch {epoch+1}] Total Loss: {total_loss:.4f} | "
               f"Cls: {avg_cls_loss:.4f} | Dom: {total_dom_loss:.4f} | "
               f"DomAcc: {dom_acc:.4f}")
+        print("[INFO] Evaluating on target test set...")
+        target_test_path = '../datasets/HC_T185_RP.txt'
+        test_dataset = PKLDataset(target_test_path)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        pseudo_test_model(model, criterion_cls, test_loader, device)
 
-        if 0.48 < dom_acc < 0.52 and avg_cls_loss < 0.5 and epoch > 10:
+        if best_gap < 0.05 and avg_cls_loss < 0.5 and epoch > 10:
             print("[INFO] Early stopping: domain aligned and classifier converged.")
             break
 
-    return model
+    return best_model
 
 
 
@@ -107,13 +132,16 @@ if __name__ == '__main__':
     source_loader, target_loader = get_dataloaders(source_path, target_path, batch_size)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=num_epochs, eta_min=learning_rate * 0.1
+    )
     criterion_cls = nn.CrossEntropyLoss()
     criterion_domain = nn.CrossEntropyLoss()
 
     print("[INFO] Starting standard DANN training (no pseudo labels)...")
-    train_dann(model, source_loader, target_loader,
+    model=train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
-               device, num_epochs=20, lambda_=0.5)
+               device, num_epochs=20, lambda_=0.5,scheduler=scheduler)
 
     print("[INFO] Evaluating on target test set...")
     test_dataset = PKLDataset(target_test_path)
