@@ -61,48 +61,42 @@ Nutze `data_preprocessing.py`, um Datenpfade aus `datasets` nach `datasets/sourc
 
 ---
 
-### 3. Modelltraining
+### 3. Modellbau
 
 Ausführen:
 
 ```bash
-python baseline/baseline.py
+models/Flexible_CNN.py	
+models/Flexible_DANN.py	
+models/generate_pseudo_labels.py	
+models/get_no_label_dataloader.py	
 ```
 
-Funktionen:
-- Liest Konfiguration aus `configs/default.yaml`
-- Trainiert das Flexible_CNN-Modell
-- Speichert das beste Modell nach `model/best_model.pth`
+- Verwenden Sie Flexible_CNN.py, um einen grundlegenden CNN-Klassifikator zu erstellen.
+-  Verwenden Sie Flexible_DANN.py, um ein Domänenanpassungsmodell zu erstellen.
+-  Laden Sie den unbeschrifteten Datensatz über get_no_label_dataloader.py 
+- Und generieren Sie schließlich Pseudo-Labels mit generate_pseudo_labels.py
 
 ---
 
-### 4. Modelltest
+### 4. Modelltraining und Test
 
 Ausführen:
 
 ```bash
-python baseline/baseline_test.py
+python baseline/baseline.py	
+python baseline/baseline_test.py	
 ```
 
-Ausgabe:
-- Test Loss
-- Test Accuracy
+- Funktionen:
+  - Liest Konfiguration aus `configs/default.yaml`
+  - Trainiert das Flexible_CNN-Modell
+  - Speichert das beste Modell nach `model/best_model.pth`
+  - Test 
 
 ---
 
 ### 5. Domain Adaptation Training (In Arbeit)
-
-Method DANN:
-
-```bash
-method_DANN/m_DANN.py
-method_DANN/m_DANN.ipynb
-```
-
-Ausgabe:
-- Source Accuracy:0.3996
-- Test Accuracy:0.6826
-- Performanceverbesserung:0.283
 
 Method pseudo:
 
@@ -116,6 +110,18 @@ Ausgabe:
 - Source Accuracy:
 - Test Accuracy:
 - Performanceverbesserung:
+
+Method DANN:
+
+```bash
+method_DANN/m_DANN.py
+method_DANN/m_DANN.ipynb
+```
+
+Ausgabe:
+- Source Accuracy:0.3996
+- Test Accuracy:0.6826
+- Performanceverbesserung:0.283
 
 
 
