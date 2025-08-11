@@ -20,6 +20,9 @@ Dies ist der Code-Teil meiner Masterarbeit. In dieser Arbeit wird untersucht, wi
 ├── method_pseudo/               # method_pseudo
 │   └── m_pseudo
 │ 
+├── method_DANN/                # method_DANN
+│   └── m_DANN
+│ 
 ├── models/                      # Modellarchitekturen (z.B. Flexible_CNN)
 │
 ├── preprocessing/               # Datenvorverarbeitung
@@ -30,6 +33,7 @@ Dies ist der Code-Teil meiner Masterarbeit. In dieser Arbeit wird untersucht, wi
 ├── data_preprocessing.py       # Skript zur Erstellung von Datenpfad-Textdateien
 ├── outliers.py                 # Ausreißerbehandlung
 ├── requirements.txt            # Abhängigkeiten für Python
+├── Denken und Reflexion.md     # Denken und Reflexion
 └── README.md                   # Diese Dokumentation
 ```
 
@@ -86,18 +90,36 @@ Ausgabe:
 
 ---
 
-### 5. Domain Adaptation Training (in Arbeit)
+### 5. Domain Adaptation Training (In Arbeit)
 
-Ausführen:
+Method DANN:
 
 ```bash
-# wird noch ergänzt
+method_DANN/m_DANN.py
+method_DANN/m_DANN.ipynb
 ```
 
 Ausgabe:
-- Test Loss
-- Test Accuracy
-- Performanceverbesserung
+- Source Accuracy:0.3996
+- Test Accuracy:0.6826
+- Performanceverbesserung:0.283
+
+Method pseudo:
+
+```bash
+method_pseudo/m_pseudo.py
+method_pseudo/iterative_pseudo_labeling.py
+```
+
+Ausgabe:
+
+- Source Accuracy:
+- Test Accuracy:
+- Performanceverbesserung:
+
+
+
+
 
 ---
 
