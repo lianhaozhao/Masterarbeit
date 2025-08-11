@@ -2,7 +2,7 @@
 
 1. Für die **Baseline** habe ich verschiedene **Datenvorverarbeitungsmethoden** getestet: MinMax-Skalierung, Z-Score-Normalisierung und einen Normalizer (angepasst an den Quelldaten, gemeinsam für Ziel verwendet). Leider führten diese nicht zu guten Ergebnissen auf dem Testset. Der Grund könnte die Abhängigkeit von globalen Statistiken sein, daher verwende ich nun die normalisierenden Schichten des Netzwerks selbst.
 
-2. Beim **Feature-Extractor** hat sich nach mehreren Versuchen bestätigt, dass **GroupNorm** die besten Ergebnisse liefert. Die Normalisierung erfolgt über halb so viele Gruppen wie Schichten, im Vergleich zu BatchNorm (batch-abhängig) und LayerNorm (schichtenweise). GroupNorm vermeidet Batch-Statistiken - Mittelwert und Varianz werden kanalgruppenweise berechnet, was die Unterscheidbarkeit zwischen Kanälen erhält.
+2. Beim **Feature-Extractor** hat sich nach mehreren Versuchen bestätigt, dass **GroupNorm** die besten Ergebnisse liefert. Die Normalisierung erfolgt über halb so viele Gruppen wie Schichten, im Vergleich zu BatchNorm (batch-abhängig) und LayerNorm (schichtenweise). GroupNorm vermeidet Batch-Statistiken - Mittelwert und Varianz werden kanalgruppenweise berechnet, was die Unterscheidbarkeit zwischen Kanälen erhält.(https://arxiv.org/abs/1803.08494 Group Normalization)
 
 3. Für den **Klassifikationskopf** wurde kein einfacher Classifier verwendet, sondern eine Kombination aus LayerNorm-Normalisierung und Cosine-Ähnlichkeitsclassifier. Ein Temperature-Parameter skaliert die Logits und beeinflusst die Softmax-Konfidenzverteilung, was sich für Domain Adaptation eignet.
 
