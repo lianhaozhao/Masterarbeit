@@ -201,3 +201,38 @@ def pseudo_soft_train_model(model, pseudo_loader,optimizer, device,
         model.load_state_dict(best_model_state)
 
     return model,best_val_loss
+
+
+def pseudo_soft_test_model(model, criterion, pseudo_test_loader, device, use_soft_labels=False):
+    model.eval()
+    total_loss = 0.0
+    correct = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for inputs, targets in pseudo_test_loader:
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+
+            outputs = model(inputs)
+            outputs = outputs[0] if isinstance(outputs, tuple) else outputs
+
+            if use_soft_labels:
+                # 确保targets是浮点型概率分布
+                targets = targets.float()  # 新增强制类型转换
+                log_probs = F.log_softmax(outputs, dim=1)
+                loss = criterion(log_probs, targets)
+            else:
+                # 硬标签处理保持不变
+                loss = criterion(outputs, targets.long() if targets.dtype != torch.long else targets)
+                _, preds = torch.max(outputs, 1)
+                correct += (preds == targets).sum().item()
+
+            total_loss += loss.item() * inputs.size(0)
+            total_samples += inputs.size(0)
+
+    avg_loss = total_loss / total_samples
+    if use_soft_labels:
+        print(f"- Test KL Divergence: {avg_loss:.6f}")
+    else:
+        print(f"- Test Loss: {avg_loss:.6f}, Acc: {correct / total_samples:.4f}")

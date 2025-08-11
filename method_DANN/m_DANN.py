@@ -86,13 +86,6 @@ def train_dann(model, source_loader, target_loader,
               f"Cls: {avg_cls_loss:.4f} | Dom: {total_dom_loss:.4f} | "
               f"DomAcc: {dom_acc:.4f}")
 
-        # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/HC_T185_RP.txt'
-        # test_dataset = PKLDataset(target_test_path)
-        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        # pseudo_test_model(model, criterion_cls, test_loader, device)
-
-
 
         if gap < 0.05 and avg_cls_loss < 0.05 and epoch > 10:
             patience +=1
