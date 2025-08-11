@@ -30,7 +30,6 @@ TRANSFORM_MAP = {
     "minmax": min_max,
     "none": identity,
 }
-import torch
 
 class FitNormalizer:
     def __init__(self, mode="zscore"):
@@ -129,7 +128,7 @@ def fit_normalizer_from_txt(txt_path, mode="zscore", use_mean_channel=False, max
     return norm
 
 if __name__ == '__main__':
-    dataset = PKLDataset(txt_path='datasets/DC_T197_AZ.txt', transform_type='zscore')
+    dataset = N_PKLDataset(txt_path='datasets/DC_T197_AZ.txt', transform_type='zscore')
     print(len(dataset))  # 样本总数
     x, y = dataset[1]  # 获取第一个样本
     print(x.shape, x, y)  # 打印数据和标签

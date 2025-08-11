@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.Flexible_CNN import Flexible_CNN, freeze_feature_train_head
+from models.Flexible_CNN import Flexible_CNN
 from models.generate_pseudo_labels import generate_pseudo_labels
 from PKLDataset import PKLDataset
 from torch.utils.data import DataLoader, TensorDataset
@@ -8,7 +8,7 @@ import os
 import numpy as np
 import random
 import yaml
-from models.pseudo_train_and_test import pseudo_train_model, pseudo_test_model
+from utils.pseudo_train_and_test import pseudo_train_model, pseudo_test_model
 
 # --------------------------- Seed ---------------------------
 seed = 42

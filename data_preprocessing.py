@@ -173,9 +173,9 @@ def split_data(input_txt, output_train, split_ratio=0.8, seed=42):
 
 if __name__ == '__main__':
     # write_file()
-    input_txt = "datasets/HC_T185_RP.txt"  # 你的输入文件
-    output_train = "datasets/target/train/HC_T185_RP.txt"
-    output_rest = "datasets/target/test/HC_T185_RP.txt"
+    input_txt = "datasets/HC_T188_RP.txt"  # 你的输入文件
+    output_train = "datasets/target/train/HC_T188_RP.txt"
+    output_rest = "datasets/target/test/HC_T188_RP.txt"
     split_source_save_all(input_txt, output_train, output_rest, split_ratio=0.8,seed=42)
 
 

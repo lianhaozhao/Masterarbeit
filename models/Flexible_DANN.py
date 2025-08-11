@@ -21,7 +21,7 @@ class DomainClassifier(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(feature_dim, hidden),
-            nn.BatchNorm1d(hidden),
+            nn.LayerNorm(hidden),
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(domain_dropout),
             nn.Linear(hidden, num_domains)

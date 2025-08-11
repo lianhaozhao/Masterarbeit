@@ -1,15 +1,15 @@
 import torch
 import torch.nn as nn
-from models.Flexible_CNN import Flexible_CNN,freeze_feature_train_head
-from models.generate_pseudo_labels import generate_pseudo_labels,generate_soft_pseudo_labels
+from models.Flexible_CNN import Flexible_CNN
+from models.generate_pseudo_labels import generate_pseudo_labels
 from PKLDataset import PKLDataset
 from torch.utils.data import DataLoader ,TensorDataset
 import os
 import numpy as np
 import random
 import yaml
-from models.pseudo_train_and_test import pseudo_train_model, pseudo_test_model, pseudo_soft_train_model
-from utils.get_no_label_dataloader import get_target_loader
+from utils.pseudo_train_and_test import pseudo_train_model, pseudo_test_model
+from models.get_no_label_dataloader import get_target_loader
 
 def set_seed(seed=42):
     torch.manual_seed(seed)

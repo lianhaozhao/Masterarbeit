@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+
+
 class Flexible_CNN_FeatureExtractor(nn.Module):
     """
        A flexible 1D CNN feature extractor for time-series or signal data.
@@ -15,7 +18,7 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
            cnn_act (str): Activation function ('relu', 'leakrelu', 'sigmoid', 'tanh').
            input_size (int): Input sequence length (used to infer output shape).
        """
-    def __init__(self, num_layers=2, start_channels=8,kernel_size=3, cnn_act='leakrelu',input_size=2800):
+    def __init__(self, num_layers=6, start_channels=8,kernel_size=15, cnn_act='leakrelu',input_size=2800):
         super(Flexible_CNN_FeatureExtractor, self).__init__()
 
         activation_dict = {
@@ -33,8 +36,8 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
         for i in range(num_layers):
             out_channels = start_channels * (2 ** i)
             padding = (kernel_size - 1) // 2
-            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding))
-            layers.append(nn.BatchNorm1d(out_channels))
+            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding,bias=False))
+            layers.append(nn.GroupNorm(num_groups=out_channels // 2, num_channels=out_channels))
             layers.append(activation_fn())
             layers.append(nn.MaxPool1d(kernel_size=2))
             in_channels = out_channels
@@ -49,6 +52,8 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
         x = self.conv(x)  # (B, C, 1)
         x = x.view(x.size(0), -1)  # 展平为 (B, C)
         return x
+
+
 
 
 

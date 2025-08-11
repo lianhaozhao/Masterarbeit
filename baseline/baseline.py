@@ -128,7 +128,7 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.7, patience=5
+        optimizer, mode='min', factor=0.7, patience=3
     )
     best_val_loss= train_model(
             model, train_loader, val_loader, optimizer, criterion, device,
