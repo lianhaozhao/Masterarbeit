@@ -8,7 +8,7 @@ import random
 import yaml
 from models.Flexible_DANN import Flexible_DANN
 from PKLDataset import PKLDataset
-from utils.pseudo_train_and_test import pseudo_test_model
+from utils.general_train_and_test import general_test_model
 from models.get_no_label_dataloader import get_target_loader
 
 def set_seed(seed=42):
@@ -39,12 +39,12 @@ def train_dann(model, source_loader, target_loader,
     best_model_state = None
     patience = 0
     for epoch in range(num_epochs):
-        total_loss, total_cls_loss, total_dom_loss = 0.0, 0.0, 0.0
+        cls_loss_sum, dom_loss_sum, total_loss_sum = 0.0, 0.0, 0.0
+        total_cls_samples, total_dom_samples = 0, 0
         dom_correct, dom_total = 0, 0
         model.train()
-        num_batches = 0
+
         for (src_x, src_y), tgt_x in zip(source_loader, target_loader):
-            num_batches += 1
             src_x, src_y = src_x.to(device), src_y.to(device)
             tgt_x = tgt_x.to(device)
 
@@ -70,20 +70,26 @@ def train_dann(model, source_loader, target_loader,
             loss.backward()
             optimizer.step()
 
+            cls_loss_sum += loss_cls.item() * src_x.size(0)
+            dom_loss_sum += loss_dom.item() * (src_x.size(0) + tgt_x.size(0))
+            total_loss_sum += loss.item() * (src_x.size(0) + tgt_x.size(0))
 
-            total_loss += loss.item()
-            total_cls_loss += loss_cls.item()
-            total_dom_loss += loss_dom.item()
+            total_cls_samples += src_x.size(0)
+            total_dom_samples += (src_x.size(0) + tgt_x.size(0))
 
+        avg_cls_loss = cls_loss_sum / total_cls_samples
+        avg_dom_loss = dom_loss_sum / total_dom_samples
+        avg_total_loss = total_loss_sum / total_dom_samples
+
+        # 域分类准确率（整轮）
         dom_acc = dom_correct / dom_total
-        avg_cls_loss = total_cls_loss / num_batches
         gap = abs(dom_acc - 0.5)
 
         if scheduler is not None:
             scheduler.step()
 
-        print(f"[Epoch {epoch+1}] Total Loss: {total_loss:.4f} | "
-              f"Cls: {avg_cls_loss:.4f} | Dom: {total_dom_loss:.4f} | "
+        print(f"[Epoch {epoch + 1}] Total Loss: {avg_total_loss:.4f} | "
+              f"Cls: {avg_cls_loss:.4f} | Dom: {avg_dom_loss:.4f} | "
               f"DomAcc: {dom_acc:.4f}")
 
 
@@ -156,4 +162,4 @@ if __name__ == '__main__':
     print("[INFO] Evaluating on target test set...")
     test_dataset = PKLDataset(target_test_path)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    pseudo_test_model(model, criterion_cls, test_loader, device)
+    general_test_model(model, criterion_cls, test_loader, device)

@@ -8,7 +8,7 @@ import os
 import numpy as np
 import random
 import yaml
-from utils.pseudo_train_and_test import pseudo_train_model, pseudo_test_model
+from utils.general_train_and_test import pseudo_train_model, general_test_model
 
 # --------------------------- Seed ---------------------------
 seed = 42
@@ -95,7 +95,7 @@ def iterative_pseudo_label_training(
         )
         test_dataset = PKLDataset('../datasets/target/test/HC_T185_RP.txt')
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        pseudo_test_model(model, criterion, test_loader, device)
+        general_test_model(model, criterion, test_loader, device)
 
     return model
 
@@ -141,4 +141,4 @@ if __name__ == '__main__':
     # Evaluate on test set
     test_dataset = PKLDataset('../datasets/target/test/HC_T185_RP.txt')
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-    pseudo_test_model(model, criterion, test_loader, device)
+    general_test_model(model, criterion, test_loader, device)

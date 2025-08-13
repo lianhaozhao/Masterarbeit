@@ -8,7 +8,7 @@ import os
 import numpy as np
 import random
 import yaml
-from utils.pseudo_train_and_test import pseudo_train_model, pseudo_test_model, pseudo_soft_train_model
+from utils.general_train_and_test import pseudo_train_model, general_test_model, pseudo_soft_train_model
 from models.get_no_label_dataloader import get_target_loader
 
 def set_seed(seed=42):
@@ -83,4 +83,4 @@ if __name__ == '__main__':
     pseudo_test_dataset = PKLDataset('../datasets/HC_T185_RP.txt')
     pseudo_test_loader = DataLoader(pseudo_test_dataset, batch_size=batch_size, shuffle=False)
 
-    pseudo_test_model(model, criterion, pseudo_test_loader, device)
+    general_test_model(model, criterion, pseudo_test_loader, device)

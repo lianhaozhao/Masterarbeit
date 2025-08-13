@@ -10,7 +10,7 @@
 
 5. Bei **DANN** lagen **die Anpassungen hauptsächlich am Klassifikationskopf und Feature-Extractor**, da das ursprüngliche Modell zu einfach war: Unzureichende Feature-Diskriminierung und fehlende Domain-Alignment führten zu keiner Verbesserung. Nach den Änderungen zeigte sich deutlicher Fortschritt. Ein weiteres DANN-Problem ist das **Stoppkriterium** - ohne Ziel-Labels muss es anhand interner Metriken entscheiden. Die Monitoring der Vorhersagegenauigkeit auf Ziel-Daten zeigt oft zuerst Verbesserung, dann Verschlechterung. **Aktuell wird anhand von Trainingsiterationen, Quell-Genauigkeit und Domain-Alignment-Grad entschieden** (gemessen an der Abweichung der Domain-Diskriminator-Genauigkeit von 50% Zufallstrefferquote).
 
-6. **Diese Methode hat Schwächen**: Sie beruht nur auf Quell-Metriken und dem Domain-Diskriminator, nicht auf echter Ziel-Datenperformance. Feste Schwellenwerte (z.B. gap < 0.001) sind unflexibel. **Geplant**: Nutzung von Pseudolabel-Konfidenzverteilungen und Feature-Trennanalyse (z.B. Cluster-Silhouetten-Scores，Feature MMD).
+6. **Diese Methode hat Schwächen**: Sie beruht nur auf Quell-Metriken und dem Domain-Diskriminator, nicht auf echter Ziel-Datenperformance. Feste Schwellenwerte (z.B. gap < 0.001) sind unflexibel. **Geplant**: Nutzung von Pseudolabel-Konfidenzverteilungen und Feature-Trennanalyse (z.B. Cluster-Silhouetten-Scores，Feature MMD， Conditional MMD).
 
 ```
 gap = abs(dom_acc - 0.5)

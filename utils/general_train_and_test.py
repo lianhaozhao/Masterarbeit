@@ -83,14 +83,14 @@ def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
         model.load_state_dict(best_model_state)
 
     return model,best_train_loss
-def pseudo_test_model(model, criterion, pseudo_test_loader, device):
+def general_test_model(model, criterion, general_test_loader, device):
     """
         Evaluates the model on a labeled test set using standard classification metrics.
 
         Args:
             model (nn.Module): Trained model to evaluate.
             criterion (nn.Module): Loss function (e.g., CrossEntropyLoss).
-            pseudo_test_loader (DataLoader): DataLoader containing test data with ground truth labels.
+            general_test_loader (DataLoader): DataLoader containing test data with ground truth labels.
             device (torch.device): Device for evaluation ('cuda' or 'cpu').
 
         Prints:
@@ -103,7 +103,7 @@ def pseudo_test_model(model, criterion, pseudo_test_loader, device):
     total_val_samples = 0
 
     with torch.no_grad():
-        for inputs, labels in pseudo_test_loader:
+        for inputs, labels in general_test_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             outputs = outputs[0] if isinstance(outputs, tuple) else outputs
