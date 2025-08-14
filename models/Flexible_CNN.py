@@ -72,7 +72,7 @@ class Flexible_CNN_Classifier(nn.Module):
         super().__init__()
         self.temperature = temperature
 
-        # 特征投影层：Linear -> LayerNorm -> 激活 -> Dropout
+        #  Feature projection layer: Linear -> LayerNorm -> activation -> Dropout
         self.feat_proj = nn.Sequential(
             nn.Linear(feature_dim, hidden),
             nn.LayerNorm(hidden),
@@ -80,17 +80,17 @@ class Flexible_CNN_Classifier(nn.Module):
             nn.Dropout(p)
         )
 
-        # Cosine classifier 的权重
+        # Weights of the cosine classifier
         self.weight = nn.Parameter(torch.Tensor(num_classes, hidden))
         nn.init.xavier_normal_(self.weight)  # 初始化
 
     def forward(self, x, return_feat=False):
-        # 投影特征
+        # Project features
         z = self.feat_proj(x)
 
-        # Cosine 相似度分类器
-        z_norm = F.normalize(z, dim=1)          # 特征归一化
-        w_norm = F.normalize(self.weight, dim=1) # 权重归一化
+        # Cosine similarity classifier
+        z_norm = F.normalize(z, dim=1)          # Feature normalization
+        w_norm = F.normalize(self.weight, dim=1) # Weight normalization
         logits = (z_norm @ w_norm.t()) / self.temperature
 
         if return_feat:
