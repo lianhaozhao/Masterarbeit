@@ -12,6 +12,7 @@ from utils.general_train_and_test import general_test_model
 from models.get_no_label_dataloader import get_target_loader
 from models.MMD import *
 from collections import deque
+import torch.nn.functional as F
 
 
 
@@ -47,7 +48,7 @@ def train_dann_with_mmd(model, source_loader, target_loader,
                         device, num_epochs=20,
                         lambda_dann=0.1,           # 域分类器的权重
                         lambda_mmd_max=1e-1,       # MMD 的最大权重
-                        use_mk=False,               # 是否用多核
+                        use_mk=True,               # 是否用多核
                         scheduler=None):
     PATIENCE = 3
     MIN_EPOCH = 10
@@ -58,8 +59,8 @@ def train_dann_with_mmd(model, source_loader, target_loader,
     best_model_state = None
     patience = 0
 
-    MMD_THRESH = 3e-2  # MMD²足够小的阈值，按任务可调（0.02~0.05常见）
-    MMD_PLATEAU_EPS = 5e-3  # 平台期判定的波动阈值
+    MMD_THRESH = 4e-2  # MMD²足够小的阈值，按任务可调（0.02~0.05常见）
+    MMD_PLATEAU_EPS = 5e-2  # 平台期判定的波动阈值
     mmd_hist = deque(maxlen=5)  # 用最近5个epoch判断是否进入平台期
 
     mmd_fn = (lambda x, y: mmd_mk_biased(x, y, gammas=(0.5,1,2,4,8))) if use_mk \
@@ -85,8 +86,12 @@ def train_dann_with_mmd(model, source_loader, target_loader,
             # 2) 域分类损失（DANN）
             dom_label_src = torch.zeros(src_x.size(0), dtype=torch.long, device=device)
             dom_label_tgt = torch.ones(tgt_x.size(0),  dtype=torch.long, device=device)
-            loss_dom = criterion_domain(dom_out_src, dom_label_src) + \
-                       criterion_domain(dom_out_tgt, dom_label_tgt)
+            bs_src, bs_tgt = src_x.size(0), tgt_x.size(0)
+            loss_dom_src = criterion_domain(dom_out_src, dom_label_src)
+            loss_dom_tgt = criterion_domain(dom_out_tgt, dom_label_tgt)
+
+            # 样本数加权的“单个域损失均值”
+            loss_dom = (loss_dom_src * bs_src + loss_dom_tgt * bs_tgt) / (bs_src + bs_tgt)
 
             # 3) RBF‑MMD（特征对齐）
             # 建议先做 L2 归一化，提升稳定性
@@ -153,17 +158,9 @@ def train_dann_with_mmd(model, source_loader, target_loader,
             best_gap = gap
             best_model_state = copy.deepcopy(model.state_dict())
             improved = True
-        if avg_cls_loss < best_cls - 1e-4:
-            best_cls = avg_cls_loss
-            best_model_state = copy.deepcopy(model.state_dict())
-            improved = True
-        if avg_mmd_loss < best_mmd - 1e-5:
-            best_mmd = avg_mmd_loss
-            best_model_state = copy.deepcopy(model.state_dict())
-            improved = True
 
-        # ——Early stopping：对齐 + 分类收敛 + （MMD小 或 MMD平台期）——
-        if epoch > MIN_EPOCH and cond_align and cond_cls and (cond_mmd_small or cond_mmd_plateau):
+        # ——Early stopping：对齐 + 分类收敛 + （MMD小 和 MMD平台期）——
+        if epoch > MIN_EPOCH and cond_align and cond_cls and (cond_mmd_small and cond_mmd_plateau):
             if not improved:
                 patience += 1
             else:
@@ -177,6 +174,9 @@ def train_dann_with_mmd(model, source_loader, target_loader,
         else:
 
             patience = 0
+        if epoch == (num_epochs-1):
+            if best_model_state is not None:
+                model.load_state_dict(best_model_state)
 
     return model
 
@@ -194,8 +194,8 @@ if __name__ == '__main__':
     num_epochs = config['num_epochs']
 
     source_path = '../datasets/source/train/DC_T197_RP.txt'
-    target_path = '../datasets/HC_T185_RP.txt'
-    target_test_path = '../datasets/HC_T185_RP.txt'
+    target_path = '../datasets/target/train/HC_T188_RP.txt'
+    target_test_path = '../datasets/target/test/HC_T188_RP.txt'
     out_path = 'model'
     os.makedirs(out_path, exist_ok=True)
 
@@ -205,7 +205,7 @@ if __name__ == '__main__':
                           kernel_size=kernel_size,
                           cnn_act='leakrelu',
                           num_classes=10,
-                          lambda_=0.5).to(device)
+                          lambda_=1).to(device)
 
     source_loader, target_loader = get_dataloaders(source_path, target_path, batch_size)
 
@@ -219,7 +219,7 @@ if __name__ == '__main__':
     print("[INFO] Starting standard DANN training (no pseudo labels)...")
     model = train_dann_with_mmd(model, source_loader, target_loader,
                                 optimizer, criterion_cls, criterion_domain,
-                                device, num_epochs=20, lambda_dann=0.5, scheduler=scheduler)
+                                device, num_epochs=30, lambda_dann=0.5, use_mk=True,scheduler=scheduler)
 
     print("[INFO] Evaluating on target test set...")
     test_dataset = PKLDataset(target_test_path)

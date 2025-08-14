@@ -34,7 +34,7 @@ def mmd_rbf_biased(x, y, gamma=None):
     Kxy = rbf_kernel(x, y, gamma)
     return Kxx.mean() + Kyy.mean() - 2.0 * Kxy.mean()
 
-# ——可选：多核 RBF（更鲁棒），把上面 mmd_rbf_biased 换成这个即可——
+#  多核 RBF（更鲁棒），把上面 mmd_rbf_biased 换成这个
 def rbf_kernel_multi(x, y=None, gammas=(0.5, 1, 2, 4, 8)):
     dist2 = pdist_squared(x, y)
     Ks = [torch.exp(-g * dist2) for g in gammas]

@@ -39,6 +39,9 @@ class Flexible_DANN(nn.Module):
         self.classifier = Flexible_CNN_Classifier(feature_dim, num_classes)
         self.domain_classifier = DomainClassifier(feature_dim)
         self.lambda_ = lambda_
+        # self.feature_reducer = nn.Sequential(
+        #     nn.Linear(feature_dim, 512)
+        # )
 
     def forward(self, x, grl=True):
         features = self.feature_extractor(x)
@@ -48,4 +51,5 @@ class Flexible_DANN(nn.Module):
         else:
             reversed_features = features
         domain_outputs = self.domain_classifier(reversed_features)
+        # reduced_features = self.feature_reducer(features)
         return class_outputs, domain_outputs, features
