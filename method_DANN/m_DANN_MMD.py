@@ -13,7 +13,7 @@ from models.get_no_label_dataloader import get_target_loader
 from models.MMD import *
 from collections import deque
 import torch.nn.functional as F
-
+import math
 
 
 def set_seed(seed=42):
@@ -24,20 +24,47 @@ def set_seed(seed=42):
         torch.cuda.manual_seed_all(seed)
 
 def get_dataloaders(source_path, target_path, batch_size):
+    """
+            Construct the DataLoaders for the source domain and target domain.
+
+                Parameters:
+                    source_path (str): Path to the txt file of the source domain data.
+                                       Each line usually contains the sample file path and its label.
+                    target_path (str): Path to the txt file of the target domain data.
+                                       The target domain usually has no labels.
+                    batch_size (int): Number of samples in each batch.
+
+                Returns:
+                    tuple:
+                        - source_loader: DataLoader of the source domain,
+                          which returns batches in the format (x, y).
+                        - target_loader: DataLoader of the target domain,
+                          which returns x (without labels).
+
+
+            """
     source_dataset = PKLDataset(txt_path=source_path)
     source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)
     target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
     return source_loader, target_loader
 
+def score_metric(curr, w_gap=0.5, w_mmd=0.1):
+    """
+    curr: {"gap": float, "mmd": float}
+    - gap 越小越好 →   gap
+    - mmd 越小越好 → 减去它们
+    """
+    return 0.5 - curr["gap"] * w_gap  - curr["mmd"] * w_mmd
+
 def dann_lambda(epoch, num_epochs):
     """
-    常用的 DANN λ 调度：从 0 平滑升到 1
+    常用的 DANN λ 调度：从 0 平滑升到 0.6
     你也可以把 -10 调轻/重来改变上升速度
     """
-    p = epoch / float(num_epochs)
-    return 2. / (1. + np.exp(-10 * p)) - 1.
+    p = epoch / max(1, num_epochs - 1)
+    return (2. / (1. + np.exp(-10 * p)) - 1.) * 0.5
 
-def mmd_lambda(epoch, num_epochs, max_lambda=1e-1):
+def mmd_lambda(epoch, num_epochs, max_lambda=5e-2):
     # 0 → max_lambda，S 型上升
     p = epoch / max(1, num_epochs - 1)         # p ∈ [0,1]
     s = 1.0 / (1.0 + torch.exp(torch.tensor(-10.0*(p - 0.5))))  # ∈ (0,1)
@@ -46,25 +73,24 @@ def mmd_lambda(epoch, num_epochs, max_lambda=1e-1):
 def train_dann_with_mmd(model, source_loader, target_loader,
                         optimizer, criterion_cls, criterion_domain,
                         device, num_epochs=20,
-                        lambda_dann=0.1,           # 域分类器的权重
-                        lambda_mmd_max=1e-1,       # MMD 的最大权重
-                        use_mk=True,               # 是否用多核
-                        scheduler=None):
-    PATIENCE = 3
-    MIN_EPOCH = 10
+                        lambda_mmd_max=1e-1,           # MMD 最大权重
+                        use_mk=True,                   # 多核 MMD
+                        scheduler=None,
+                        score_weights=(0.5, 0.1), # (w_gap, w_mmd)
+                        warmup_best_start=10            # 多少个 epoch 后才开始考虑“最佳”
+                        ):
 
-    best_gap = 0.5
-    best_cls = float('inf')
-    best_mmd = float('inf')
+
+    best_score = -float("inf")
     best_model_state = None
     patience = 0
 
-    MMD_THRESH = 4e-2  # MMD²足够小的阈值，按任务可调（0.02~0.05常见）
-    MMD_PLATEAU_EPS = 5e-2  # 平台期判定的波动阈值
-    mmd_hist = deque(maxlen=5)  # 用最近5个epoch判断是否进入平台期
+
+    mmd_hist = deque(maxlen=4)  # 用最近5个epoch判断是否进入平台期
+    gap_hist = deque(maxlen=4)
 
     mmd_fn = (lambda x, y: mmd_mk_biased(x, y, gammas=(0.5,1,2,4,8))) if use_mk \
-             else (lambda x, y: mmd_rbf_biased(x, y, gamma=None))
+             else (lambda x, y: mmd_rbf_biased_with_gamma(x, y, gamma=None))
 
     for epoch in range(num_epochs):
         cls_loss_sum, dom_loss_sum, mmd_loss_sum, total_loss_sum = 0.0, 0.0, 0.0, 0.0
@@ -77,8 +103,9 @@ def train_dann_with_mmd(model, source_loader, target_loader,
             src_x, src_y = src_x.to(device), src_y.to(device)
             tgt_x = tgt_x.to(device)
 
-            cls_out_src, dom_out_src, feat_src = model(src_x)
-            _,            dom_out_tgt, feat_tgt = model(tgt_x)
+            lambda_dann_now = dann_lambda(epoch, num_epochs)
+            cls_out_src, dom_out_src, feat_src = model(src_x, lambda_=lambda_dann_now)
+            _, dom_out_tgt, feat_tgt = model(tgt_x, lambda_=lambda_dann_now)
 
             # 1) 分类损失（仅源域）
             loss_cls = criterion_cls(cls_out_src, src_y)
@@ -94,7 +121,7 @@ def train_dann_with_mmd(model, source_loader, target_loader,
             loss_dom = (loss_dom_src * bs_src + loss_dom_tgt * bs_tgt) / (bs_src + bs_tgt)
 
             # 3) RBF‑MMD（特征对齐）
-            # 建议先做 L2 归一化，提升稳定性
+            # 先做 L2 归一化，提升稳定性
             feat_src_n = F.normalize(feat_src, dim=1)
             feat_tgt_n = F.normalize(feat_tgt, dim=1)
             loss_mmd = mmd_fn(feat_src_n, feat_tgt_n)
@@ -102,10 +129,9 @@ def train_dann_with_mmd(model, source_loader, target_loader,
             # 4) 组合总损失
             #    - DANN 的 lambda 可继续用你已有的动态 dann_lambda
             #    - MMD 的权重做 warm‑up（避免一开始就把决策结构抹平）
-            lambda_dann_now = dann_lambda(epoch, num_epochs) if callable(lambda_dann) else lambda_dann
             lambda_mmd_now  = float(mmd_lambda(epoch, num_epochs, max_lambda=lambda_mmd_max))
 
-            loss = loss_cls + lambda_dann_now * loss_dom + lambda_mmd_now * loss_mmd
+            loss = loss_cls + loss_dom + lambda_mmd_now * loss_mmd
 
             optimizer.zero_grad()
             loss.backward()
@@ -138,51 +164,65 @@ def train_dann_with_mmd(model, source_loader, target_loader,
         if scheduler is not None:
             scheduler.step()
 
-        print(f"[Epoch {epoch + 1}] Total: {avg_total_loss:.4f} | "
-              f"Cls: {avg_cls_loss:.4f} | Dom: {avg_dom_loss:.4f} | "
-              f"MMD: {avg_mmd_loss:.4f} | DomAcc: {dom_acc:.4f} | "
+        print(f"[Epoch {epoch + 1}] Total loss: {avg_total_loss:.4f} | "
+              f"Cls loss: {avg_cls_loss:.4f} | Dom avg loss: {avg_dom_loss:.4f} | "
+              f"MMD avg loss: {avg_mmd_loss:.4f} | DomAcc: {dom_acc:.4f} | "
               f"λ_dann: {lambda_dann_now:.4f} | λ_mmd: {lambda_mmd_now:.4f}")
 
         mmd_hist.append(avg_mmd_loss)
-        mmd_plateau = (len(mmd_hist) == mmd_hist.maxlen) and (max(mmd_hist) - min(mmd_hist) < MMD_PLATEAU_EPS)
+        gap_hist.append(gap)
 
-        # 触发条件
-        cond_align = (gap < 0.05)
-        cond_cls = (avg_cls_loss < 0.5)
-        cond_mmd_small = (avg_mmd_loss < MMD_THRESH)
-        cond_mmd_plateau = mmd_plateau
-
-        # 是否有任何指标刷新“最好”
+        # 选优
+        curr = {"gap": gap, "mmd": avg_mmd_loss}
+        w_gap, w_mmd = score_weights
+        curr_score = score_metric(curr, w_gap=w_gap, w_mmd=w_mmd)
         improved = False
-        if gap < best_gap - 1e-4:
-            best_gap = gap
+        if epoch >= warmup_best_start and (curr_score > best_score + 1e-6):
+            best_score = curr_score
             best_model_state = copy.deepcopy(model.state_dict())
             improved = True
 
-        # ——Early stopping：对齐 + 分类收敛 + （MMD小 和 MMD平台期）——
-        if epoch > MIN_EPOCH and cond_align and cond_cls and (cond_mmd_small and cond_mmd_plateau):
-            if not improved:
-                patience += 1
-            else:
-                patience = 0
-            print(f"[INFO] patience {patience} / {PATIENCE} | MMD_small={cond_mmd_small} plateau={cond_mmd_plateau}")
+        # 早停判据
+        MIN_EPOCH = 10
+        PATIENCE = 4
+        GAP = 0.05
+        EPS_REL = 0.05  # LMMD 相对变化 <5% 视为平台期
+
+        # 1) 对齐“软门槛”：最近窗口平均 gap 很小
+        gap_ok = (len(gap_hist) == gap_hist.maxlen) and (sum(gap_hist) / len(gap_hist) < GAP)
+
+        # 2) LMMD 相对平台：最近窗口的首尾相差占比很小
+        if len(mmd_hist) == mmd_hist.maxlen:
+            lmmd_first, lmmd_last = mmd_hist[0], mmd_hist[-1]
+            denom = max(1e-8, max(lmmd_first, lmmd_last))
+            lmmd_plateau_rel = (abs(lmmd_last - lmmd_first) / denom) < EPS_REL
+        else:
+            lmmd_plateau_rel = False
+
+        # 3) 主判据：score 没提升就累计耐心；同时要求“对齐达标 + LMMD 进入平台”
+        if epoch >= MIN_EPOCH and gap_ok and lmmd_plateau_rel:
+            patience = 0 if improved else (patience + 1)
+            print(f"[INFO] patience {patience}/{PATIENCE} | gap_ok={gap_ok} | lmmd_plateau_rel={lmmd_plateau_rel}")
             if patience >= PATIENCE:
-                if best_model_state is not None:
-                    model.load_state_dict(best_model_state)
-                print("[INFO] Early stopping: domain aligned, classifier converged, and MMD stabilized.")
+                print("[INFO] Early stopping by score patience with stable alignment/MMD.")
+                model.load_state_dict(best_model_state)
                 break
         else:
-
             patience = 0
-        if epoch == (num_epochs-1):
-            if best_model_state is not None:
-                model.load_state_dict(best_model_state)
+        target_test_path = '../datasets/target/test/HC_T185_RP.txt'
+        test_dataset = PKLDataset(target_test_path)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        general_test_model(model, criterion_cls, test_loader, device)
+
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+
 
     return model
 
 
 if __name__ == '__main__':
-    set_seed(seed=42)
+    set_seed(seed=44)
     with open("../configs/default.yaml", 'r') as f:
         config = yaml.safe_load(f)['baseline']
     batch_size = config['batch_size']
@@ -194,8 +234,8 @@ if __name__ == '__main__':
     num_epochs = config['num_epochs']
 
     source_path = '../datasets/source/train/DC_T197_RP.txt'
-    target_path = '../datasets/target/train/HC_T188_RP.txt'
-    target_test_path = '../datasets/target/test/HC_T188_RP.txt'
+    target_path = '../datasets/target/train/HC_T185_RP.txt'
+    target_test_path = '../datasets/target/test/HC_T185_RP.txt'
     out_path = 'model'
     os.makedirs(out_path, exist_ok=True)
 
@@ -219,7 +259,13 @@ if __name__ == '__main__':
     print("[INFO] Starting standard DANN training (no pseudo labels)...")
     model = train_dann_with_mmd(model, source_loader, target_loader,
                                 optimizer, criterion_cls, criterion_domain,
-                                device, num_epochs=30, lambda_dann=0.5, use_mk=True,scheduler=scheduler)
+                                device,
+                                num_epochs=num_epochs,
+                                lambda_mmd_max=1e-1,
+                                use_mk=True,
+                                scheduler=scheduler,
+                                score_weights=(0.5, 0.1),  # 可按任务调整权重
+                                warmup_best_start=3)
 
     print("[INFO] Evaluating on target test set...")
     test_dataset = PKLDataset(target_test_path)

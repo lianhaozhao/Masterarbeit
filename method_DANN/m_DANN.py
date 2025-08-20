@@ -19,6 +19,24 @@ def set_seed(seed=42):
         torch.cuda.manual_seed_all(seed)
 
 def get_dataloaders(source_path, target_path, batch_size):
+    """
+        Construct the DataLoaders for the source domain and target domain.
+
+            Parameters:
+                source_path (str): Path to the txt file of the source domain data.
+                                   Each line usually contains the sample file path and its label.
+                target_path (str): Path to the txt file of the target domain data.
+                                   The target domain usually has no labels.
+                batch_size (int): Number of samples in each batch.
+
+            Returns:
+                tuple:
+                    - source_loader: DataLoader of the source domain,
+                      which returns batches in the format (x, y).
+                    - target_loader: DataLoader of the target domain,
+                      which returns x (without labels).
+        """
+
     source_dataset = PKLDataset(txt_path=source_path)
     source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)
     target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
@@ -26,15 +44,15 @@ def get_dataloaders(source_path, target_path, batch_size):
 
 def dann_lambda(epoch, num_epochs):
     """
-    常用的 DANN λ 调度：从 0 平滑升到 1
-    你也可以把 -10 调轻/重来改变上升速度
+    Common DANN λ schedule: smoothly increases from 0 to 0.6
+
     """
-    p = epoch / float(num_epochs)
-    return 2. / (1. + np.exp(-10 * p)) - 1.
+    p = epoch / max(1, num_epochs - 1)
+    return (2. / (1. + np.exp(-10 * p)) - 1.) * 0.6
 
 def train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
-               device, num_epochs=20, lambda_=0.1,scheduler = None):
+               device, num_epochs=20, lambda_=dann_lambda,scheduler = None):
     best_gap = 0.5
     best_model_state = None
     patience = 0
@@ -53,17 +71,22 @@ def train_dann(model, source_loader, target_loader,
 
             loss_cls = criterion_cls(cls_out_src, src_y)
 
-            dom_label_src = torch.zeros(src_x.size(0), dtype=torch.long).to(device)
-            dom_label_tgt = torch.ones(tgt_x.size(0), dtype=torch.long).to(device)
-            loss_dom = criterion_domain(dom_out_src, dom_label_src) + \
-                       criterion_domain(dom_out_tgt, dom_label_tgt)
+            # 域分类损失（DANN）
+            dom_label_src = torch.zeros(src_x.size(0), dtype=torch.long, device=device)
+            dom_label_tgt = torch.ones(tgt_x.size(0), dtype=torch.long, device=device)
+            bs_src, bs_tgt = src_x.size(0), tgt_x.size(0)
+            loss_dom_src = criterion_domain(dom_out_src, dom_label_src)
+            loss_dom_tgt = criterion_domain(dom_out_tgt, dom_label_tgt)
+
+            # 样本数加权的“单个域损失均值”
+            loss_dom = (loss_dom_src * bs_src + loss_dom_tgt * bs_tgt) / (bs_src + bs_tgt)
 
             dom_preds_src = torch.argmax(dom_out_src, dim=1)
             dom_preds_tgt = torch.argmax(dom_out_tgt, dim=1)
             dom_correct += (dom_preds_src == dom_label_src).sum().item()
             dom_correct += (dom_preds_tgt == dom_label_tgt).sum().item()
             dom_total += dom_label_src.size(0) + dom_label_tgt.size(0)
-
+            lambda_=dann_lambda(epoch, num_epochs)
             loss = loss_cls + lambda_ * loss_dom
 
             optimizer.zero_grad()
@@ -89,11 +112,11 @@ def train_dann(model, source_loader, target_loader,
             scheduler.step()
 
         print(f"[Epoch {epoch + 1}] Total Loss: {avg_total_loss:.4f} | "
-              f"Cls: {avg_cls_loss:.4f} | Dom: {avg_dom_loss:.4f} | "
+              f"Cls loss: {avg_cls_loss:.4f} | Dom loss: {avg_dom_loss:.4f} | "
               f"DomAcc: {dom_acc:.4f}")
 
 
-        if gap < 0.05 and avg_cls_loss < 0.05 and epoch > 10:
+        if gap < 0.02 and avg_cls_loss < 0.05 and epoch > 10:
             patience +=1
             if gap < best_gap:
                 best_gap = gap
@@ -107,9 +130,9 @@ def train_dann(model, source_loader, target_loader,
             patience = 0
             best_gap = gap
 
-        if best_model_state is not None:
-            # torch.save(best_model_state, os.path.join(out_path, 'test_best_model.pth'))
-            model.load_state_dict(best_model_state)
+
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
 
 
     return model
@@ -120,7 +143,7 @@ def train_dann(model, source_loader, target_loader,
 
 
 if __name__ == '__main__':
-    set_seed(seed=42)
+    set_seed(seed=44)
     with open("../configs/default.yaml", 'r') as f:
         config = yaml.safe_load(f)['baseline']
     batch_size = config['batch_size']
@@ -132,8 +155,8 @@ if __name__ == '__main__':
     num_epochs = config['num_epochs']
 
     source_path = '../datasets/source/train/DC_T197_RP.txt'
-    target_path = '../datasets/HC_T185_RP.txt'
-    target_test_path = '../datasets/HC_T185_RP.txt'
+    target_path = '../datasets/target/train/HC_T185_RP.txt'
+    target_test_path = '../datasets/target/test/HC_T185_RP.txt'
     out_path = 'model'
     os.makedirs(out_path, exist_ok=True)
 
@@ -143,7 +166,7 @@ if __name__ == '__main__':
                           kernel_size=kernel_size,
                           cnn_act='leakrelu',
                           num_classes=10,
-                          lambda_=0.5).to(device)
+                          lambda_=1).to(device)
 
     source_loader, target_loader = get_dataloaders(source_path, target_path, batch_size)
 
@@ -157,7 +180,7 @@ if __name__ == '__main__':
     print("[INFO] Starting standard DANN training (no pseudo labels)...")
     model=train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
-               device, num_epochs=20, lambda_=0.5,scheduler=scheduler)
+               device, num_epochs=40, lambda_=dann_lambda,scheduler=scheduler)
 
     print("[INFO] Evaluating on target test set...")
     test_dataset = PKLDataset(target_test_path)

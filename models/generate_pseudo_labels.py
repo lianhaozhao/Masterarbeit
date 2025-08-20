@@ -25,9 +25,12 @@ def generate_pseudo_labels(model, target_loader, device, threshold=0.9):
             # Handle (input, label) or other tuple/list format
             if isinstance(inputs, (tuple, list)):
                 inputs = inputs[0]
+            else:
+                inputs = inputs
 
             inputs = inputs.to(device)
             outputs = model(inputs)  # Forward pass
+            outputs = outputs[0]
 
             probs = F.softmax(outputs, dim=1)  # Convert logits to probabilities
 
@@ -51,7 +54,7 @@ def generate_pseudo_labels(model, target_loader, device, threshold=0.9):
         pseudo_data = torch.empty(0)
         pseudo_labels = torch.empty(0)
 
-    print(f"Number of pseudo-labeled samples: {len(pseudo_data)}")
+
 
     return pseudo_data, pseudo_labels
 
