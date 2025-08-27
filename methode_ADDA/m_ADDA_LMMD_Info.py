@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from models.Flexible_DANN_pseudo_MMD import Flexible_DANN
+from models.Flexible_ADDA import Flexible_ADDA,freeze,unfreeze,DomainClassifier
 from PKLDataset import PKLDataset
 from models.get_no_label_dataloader import get_target_loader
 from utils.general_train_and_test import general_test_model
@@ -21,10 +21,6 @@ def get_dataloaders(source_path, target_path, batch_size):
     src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
     return src_loader, tgt_loader
 
-# DANN Lambda Scheduling (GRL only)
-def dann_lambda(epoch, num_epochs, max_lambda=0.5):
-    p = epoch / max(1, num_epochs-1)
-    return (2.0 / (1.0 + np.exp(-5 * p)) - 1.0) * max_lambda
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
@@ -150,11 +146,11 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
         total += x.size(0)
         x_dev = x.to(device)
-        logits, _, _ = model(x_dev)
+        logits, _ , _= model(x_dev)
         prob = F.softmax(logits / T, dim=1)
         top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
-        conf, _ = torch.max(prob, dim=1)  # [B]
-        margin = top2[:, 0] - top2[:, 1]  # [B]
+        conf, _ = torch.max(prob, dim=1)            # [B]
+        margin = top2[:, 0] - top2[:, 1]            # [B]
         keep = conf >= threshold
         if keep.any():
             # ---- 修改处：用 GPU 上的掩码索引 GPU 张量，再搬回 CPU ----
@@ -163,11 +159,8 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
             ws.append(margin[keep].detach().cpu())
             margins.append(margin[keep].detach().cpu())
     if len(xs) == 0:
-        x_cat = torch.empty(0);
-        y_cat = torch.empty(0, dtype=torch.long);
-        w_cat = torch.empty(0)
-        cov = 0.0;
-        margin_mean = 0.0
+        x_cat = torch.empty(0); y_cat = torch.empty(0, dtype=torch.long); w_cat = torch.empty(0)
+        cov = 0.0; margin_mean = 0.0
     else:
         x_cat = torch.cat(xs, dim=0)
         y_cat = torch.cat(ys, dim=0)
@@ -176,6 +169,7 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
         margin_mean = float(torch.cat(margins).mean())
     return x_cat, y_cat, w_cat, {"kept": int(x_cat.size(0)), "total": int(total),
                                  "coverage": cov, "margin_mean": margin_mean}
+
 
 #  Weighted Class Conditional MMD (Multi-core RBF)
 def _pairwise_sq_dists(a, b):
@@ -226,260 +220,258 @@ def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
             wsum += w
     return total / wsum if wsum > 0 else total
 
-# Training
-def train_dann_infomax_lmmd(model,
-                            source_loader, target_loader,
-                            optimizer, criterion_cls, criterion_domain,
-                            device, num_epochs=20, num_classes=10,
-                            pseudo_thresh=0.95,
-                            mmd_gammas=(0.5,1,2,4,8),
-                            scheduler=None, batch_size=16,
-                            # InfoMax
-                            im_T=1.0, im_weight=0.5, im_marg_w=1.0,
-                            # Gating
-                            lmmd_start_epoch=5,lmmd_t=1
-                            ):
-    # Hyperparameters related to early stopping
-    W = 5
-    GAP_TH = 0.05  # DomAcc distance threshold of 0.5 (the smaller the better alignment)
-    PATIENCE = 3  # Stop after several rounds without improvement
 
-    # Track Cache & Best Recording
-    gap_hist = deque(maxlen=W)
-    best_score = float('inf')
-    best_state = None
-    plateau_best_score = float('inf')
-    plateau_best_state = None
-    patience = 0
 
+
+
+@torch.no_grad()
+def copy_encoder_params(src_model, tgt_model, device):
+    """
+    依赖 Flexible_DANN 的 forward(x) 能返回 (logits, features)。
+    我们不知道内部模块名，因此采取“整体复制”作为安全默认，然后在对抗阶段冻结 tgt_model 的 classifier，
+    只训练其 encoder（因为 ADDA 要固定 C）。
+    """
+    tgt_model.load_state_dict(copy.deepcopy(src_model.state_dict()))
+    tgt_model.to(device)
+
+
+# ===== 新增：阶段1 —— 仅用源域训练 (F_s + C) =====
+def pretrain_source_classifier(src_model, source_loader, optimizer, criterion_cls, device, num_epochs=5, scheduler=None):
+    src_model.train()
     for epoch in range(num_epochs):
-        # 1) Pseudo-labeling
+        tot_loss, tot_n = 0.0, 0
+        for xb, yb in source_loader:
+            xb, yb = xb.to(device), yb.to(device)
+            logits, _, _= src_model(xb)
+            loss = criterion_cls(logits, yb)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            tot_loss += loss.item() * xb.size(0); tot_n += xb.size(0)
+        print(f"[SRC PRETRAIN] Epoch {epoch+1}/{num_epochs} | cls:{tot_loss/max(1,tot_n):.4f}")
+        if scheduler is not None:
+            scheduler.step()
+    return src_model
+
+# ===== 新增：阶段2 —— ADDA 对抗 + (可选) InfoMax + (可选) LMMD =====
+def train_adda_infomax_lmmd(
+    src_model, tgt_model, source_loader, target_loader,
+    device, num_epochs=20, num_classes=10,batch_size=16,
+    # 判别器/优化器
+    lr_ft=1e-4, lr_d=1e-4, weight_decay=0.0,d_steps=1, ft_steps=3,
+    # InfoMax
+    im_T=1.0, im_weight=0.5, im_marg_w=1.0,
+    # Pseudo+LMMD
+    lmmd_start_epoch=5, pseudo_thresh=0.95, mmd_gammas=(0.5,1,2,4,8), T_lmmd = 2
+):
+    # 1) 冻结源模型 (完全固定 F_s + C)
+    src_model.eval(); freeze(src_model)
+
+    # 2) 冻结目标模型的 classifier，只训练其 encoder
+    for p in tgt_model.classifier.parameters():
+        p.requires_grad = False
+    tgt_model.classifier.eval()
+    enc_params = [p for n, p in tgt_model.named_parameters() if not n.startswith('classifier')]
+    opt_ft = torch.optim.Adam(enc_params, lr=lr_ft, weight_decay=weight_decay)
+
+    # 3) 通过一个 batch 推断特征维度，按需构造 D
+    with torch.no_grad():
+        xb_s, yb_s = next(iter(source_loader))
+        xb_s = xb_s.to(device)
+        _ , feat_s, _= src_model(xb_s)
+        feat_dim = feat_s.size(1)
+    D = DomainClassifier(feature_dim=feat_dim).to(device)
+    opt_d = torch.optim.Adam(D.parameters(), lr=lr_d, weight_decay=weight_decay)
+    c_dom = nn.CrossEntropyLoss().to(device)
+
+    # 4) 训练循环（交替优化 D 和 F_t）
+    for epoch in range(num_epochs):
+        # 准备伪标签以便 LMMD
         pl_loader = None
-        pseudo_x = torch.empty(0)
-        pseudo_y = torch.empty(0, dtype=torch.long)
-        pseudo_w = torch.empty(0)
+        pseudo_x = pseudo_y = pseudo_w = None
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, target_loader, device, threshold=pseudo_thresh, T=lmmd_t
+                tgt_model, target_loader, device, threshold=pseudo_thresh, T=T_lmmd
             )
-            kept, total = stats["kept"], stats["total"]
             cov, margin_mean = stats["coverage"], stats["margin_mean"]
-            if kept > 0:
+            if pseudo_x.numel() > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
-
-        # 2) Gated LMMD weights
-        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=12e-2, start_epoch=lmmd_start_epoch)
-        # Quality q: Linearly normalize margin (0.05-0.5) and couple it with coverage (concave, to avoid high coverage but poor quality)
+        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=2e-1, start_epoch=lmmd_start_epoch)
         def _lin(x, lo, hi):
             return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
         q_margin = _lin(margin_mean, 0.05, 0.50)
         q_cov = math.sqrt(max(0.0, cov))  # concave
         q = q_margin * q_cov
         lambda_mmd_eff = lambda_mmd_base * q
-        # lambda_mmd_eff = max(0.015,lambda_mmd_base * q)
 
-        # 3) epoch training
-        model.train()
-        it_src = iter(source_loader)
-        it_tgt = iter(target_loader)
-        it_pl  = iter(pl_loader) if pl_loader is not None else None
+        it_src, it_tgt = iter(source_loader), iter(target_loader)
+        it_pl = iter(pl_loader) if pl_loader is not None else None
         len_src, len_tgt = len(source_loader), len(target_loader)
-        len_pl = len(pl_loader) if pl_loader is not None else 0
-        num_iters = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
+        len_pl  = len(pl_loader) if pl_loader is not None else 0
+        steps = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
 
-        cls_loss_sum = dom_loss_sum = mmd_loss_sum = im_loss_sum = 0.0
-        tot_loss_sum = 0.0
-        tot_target_samples=tot_cls_samples = tot_dom_samples = 0
-        dom_correct_src = dom_correct_tgt = 0
-        dom_total_src = dom_total_tgt = 0
+        tgt_model.train()
+        tgt_model.classifier.eval()
+        D.train()
 
-        for _ in range(num_iters):
-            try: src_x, src_y = next(it_src)
+        # 统计
+        d_loss_sum = g_loss_sum = im_loss_sum = mmd_loss_sum = ft_loss_sum = 0.0
+        loss_g_sum = loss_ft_sum = g_d_loss_sum = loss_im_sum = loss_lmmd_sum = 0.0
+        d_acc_sum = 0.0; d_cnt = 0
+
+        for _ in range(steps):
+            try: xs, ys = next(it_src)
             except StopIteration:
-                it_src = iter(source_loader); src_x, src_y = next(it_src)
-            try: tgt_x = next(it_tgt)
+                it_src = iter(source_loader); xs, ys = next(it_src)
+            try: xt = next(it_tgt)
             except StopIteration:
-                it_tgt = iter(target_loader); tgt_x = next(it_tgt)
-            if isinstance(tgt_x, (tuple, list)): tgt_x = tgt_x[0]
-            if it_pl is not None:
-                try: tgt_pl_x, tgt_pl_y, tgt_pl_w = next(it_pl)
-                except StopIteration:
-                    it_pl = iter(pl_loader); tgt_pl_x, tgt_pl_y, tgt_pl_w = next(it_pl)
-            else:
-                tgt_pl_x = tgt_pl_y = tgt_pl_w = None
+                it_tgt = iter(target_loader); xt = next(it_tgt)
+            if isinstance(xt, (tuple,list)): xt = xt[0]
+            xs, ys, xt = xs.to(device), ys.to(device), xt.to(device)
 
-            src_x, src_y = src_x.to(device), src_y.to(device)
-            tgt_x = tgt_x.to(device)
-            if tgt_pl_x is not None:
-                tgt_pl_x = tgt_pl_x.to(device)
-                tgt_pl_y = tgt_pl_y.to(device)
-                tgt_pl_w = tgt_pl_w.to(device)
+            # ---------- (A) 训练 D: max log D(F_s(xs)) + log (1 - D(F_t(xt))) ----------
+            for _k in range(d_steps):
+                with torch.no_grad():
+                    _, f_s, _= src_model(xs)       # [B, d]
+                    _, f_t, _= tgt_model(xt)       # [B, d]
+                d_in  = torch.cat([f_s, f_t], dim=0)
+                d_lab = torch.cat([torch.ones(f_s.size(0)), torch.zeros(f_t.size(0))], dim=0).long().to(device)  # 1=source,0=target
+                d_out = D(d_in)
+                loss_d = c_dom(d_out, d_lab)
+                opt_d.zero_grad()
+                loss_d.backward()
+                opt_d.step()
 
-            # forword
-            # Put λ only into GRL
-            model.lambda_ = float(dann_lambda(epoch, num_epochs))
-            cls_out_src, dom_out_src, feat_src = model(src_x, grl=True)
-            cls_out_tgt, dom_out_tgt, feat_tgt = model(tgt_x, grl=True)
+                # 记录 D acc
+                with torch.no_grad():
+                    pred = d_out.argmax(1)
+                    d_acc = (pred == d_lab).float().mean().item()
+                    d_acc_sum += d_acc; d_cnt += 1
+                    d_loss_sum += loss_d.item()
 
-            # 1) Source classification
-            loss_cls = criterion_cls(cls_out_src, src_y)
+            # ---------- (B) 训练 F_t: min 交叉熵(D(F_t(xt)), “source”标签) ----------
+            D.eval()
+            for p in D.parameters():
+                p.requires_grad = False
 
-            # 2) Domain confrontation
-            dom_label_src = torch.zeros(src_x.size(0), dtype=torch.long, device=device)
-            dom_label_tgt = torch.ones(tgt_x.size(0),  dtype=torch.long, device=device)
-            loss_dom = (
-                criterion_domain(dom_out_src, dom_label_src) * src_x.size(0)
-                + criterion_domain(dom_out_tgt, dom_label_tgt) * tgt_x.size(0)
-            ) / (src_x.size(0) + tgt_x.size(0))
+            for _k in range(ft_steps):
+                _, f_t, _  = tgt_model(xt)
+                logits_t = src_model.classifier(f_t)
+                fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # 让 D 预测成“source” -1
+                g_out = D(f_t)
+                loss_g = c_dom(g_out, fool_lab)
 
-            # 3) InfoMax
-            loss_im, h_cond, h_marg = infomax_loss_from_logits(cls_out_tgt, T=im_T, marg_weight=im_marg_w)
-            loss_im = im_weight * loss_im
+                # InfoMax 正则 —— 更自信但不塌缩
+                loss_im, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=im_T, marg_weight=im_marg_w)
+                loss_im = im_weight * loss_im
 
-            # 4) Class-conditional LMMD (weighted, quality-gated)
-            feat_src_n = F.normalize(feat_src, dim=1)
-            if tgt_pl_x is not None and lambda_mmd_eff > 0:
-                _, _, feat_tgt_pl = model(tgt_pl_x, grl=False)
-                feat_tgt_pl_n = F.normalize(feat_tgt_pl, dim=1)
-                loss_lmmd = classwise_mmd_biased_weighted(
-                    feat_src_n, src_y, feat_tgt_pl_n, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=2
-                )
-                loss_lmmd = lambda_mmd_eff * loss_lmmd
-            else:
-                loss_lmmd = feat_src_n.new_tensor(0.0)
 
-            loss = loss_cls + loss_dom + loss_im + loss_lmmd
+                # LMMD：使用源真标签与目标伪标签做类条件对齐
+                if it_pl is not None:
+                    try: xpl, ypl, wpl = next(it_pl)
+                    except StopIteration:
+                        it_pl = iter(pl_loader); xpl, ypl, wpl = next(it_pl)
+                    xpl, ypl, wpl = xpl.to(device), ypl.to(device), wpl.to(device)
+                    with torch.no_grad():
+                        _, _,f_s_n = src_model(xs)
+                        f_s_n = F.normalize(f_s_n, dim=1)
+                    _, _,f_t_pl = tgt_model(xpl)
+                    f_t_pl_n = F.normalize(f_t_pl, dim=1)
+                    loss_lmmd = classwise_mmd_biased_weighted(
+                        f_s_n, ys, f_t_pl_n, ypl, wpl,
+                        num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=2
+                    )
+                    loss_lmmd = lambda_mmd_eff * loss_lmmd
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            # ------ Statistics ------
-            cls_loss_sum  += loss_cls.item() * src_x.size(0)
-            dom_loss_sum  += loss_dom.item() * (src_x.size(0) + tgt_x.size(0))
-            im_loss_sum   += loss_im.item()  * (tgt_x.size(0))
-            mmd_loss_sum  += loss_lmmd.item() * src_x.size(0)
-            tot_loss_sum  += loss.item()     * (src_x.size(0) + tgt_x.size(0))
-            tot_cls_samples += src_x.size(0)
-            tot_dom_samples += (src_x.size(0) + tgt_x.size(0))
-            tot_target_samples += tgt_x.size(0)
-
-            dom_correct_src += (dom_out_src.argmax(1) == dom_label_src).sum().item()
-            dom_total_src   += dom_label_src.size(0)
-            dom_correct_tgt += (dom_out_tgt.argmax(1) == dom_label_tgt).sum().item()
-            dom_total_tgt   += dom_label_tgt.size(0)
-
-        # ---- Epoch Log ----
-        avg_cls = cls_loss_sum / max(1, tot_cls_samples)
-        avg_dom = dom_loss_sum / max(1, tot_dom_samples)
-        avg_im  = im_loss_sum  / max(1, tot_target_samples)
-        avg_mmd = mmd_loss_sum / max(1, tot_cls_samples)
-        avg_tot = tot_loss_sum / max(1, tot_dom_samples)
-        acc_src = dom_correct_src / max(1, dom_total_src)
-        acc_tgt = dom_correct_tgt / max(1, dom_total_tgt)
-        dom_acc = 0.5 * (acc_src + acc_tgt)
-        gap = abs(dom_acc - 0.5)
-        if scheduler is not None: scheduler.step()
-
-        print(f"[Epoch {epoch+1}] Total loss:{avg_tot:.4f} | Avg cls loss:{avg_cls:.4f} | avg Dom loss:{avg_dom:.4f} "
-              f"| avg IM loss:{avg_im:.4f} | avg LMMD loss:{avg_mmd:.4f} | DomAcc:{dom_acc:.4f} | "
-              f"cov:{cov:.2%} margin:{margin_mean:.3f} | "
-              f"λ_GRL:{model.lambda_:.4f} | λ_mmd_eff:{lambda_mmd_eff:.4f}")
-
-        gap_hist.append(gap)
-
-        score =gap  + avg_im
-
-        # Record the optimal model
-        if epoch > 15:
-            improved_global = (score < best_score - 1e-6)
-            if improved_global:
-                best_score = score
-                best_state = copy.deepcopy(model.state_dict())
-
-            gap_ok = (len(gap_hist) == W) and (sum(gap_hist) / W < GAP_TH)
-            if gap_ok:
-                improved_plateau = (score < plateau_best_score - 1e-6)
-                if improved_plateau:
-                    plateau_best_score = score
-                    plateau_best_state = copy.deepcopy(model.state_dict())
-                    patience = 0
                 else:
-                    patience += 1
-                print(f"[EARLY-STOP] patience {patience}/{PATIENCE} | gap_ok={gap_ok} | score={score:.4f}")
-                if patience >= PATIENCE:
-                    print("[EARLY-STOP] Stopping: stable alignment and no score improvement.")
-                    # Prioritize backloading the "plateau optimal"; otherwise, backloading the "global optimal"
-                    if plateau_best_state is not None:
-                        model.load_state_dict(plateau_best_state)
-                        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
-                    elif best_state is not None:
-                        model.load_state_dict(best_state)
-                        # torch.save(best_state, "./model/185_best.pth")
-                    break
-            else:
+                    loss_lmmd = f_t.new_tensor(0.0)
 
-                patience = 0
-        # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/target/test/HC_T197_RP.txt'
-        # test_dataset = PKLDataset(target_test_path)
-        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        # general_test_model(model, criterion_cls, test_loader, device)
 
-    if plateau_best_state is not None:
-        model.load_state_dict(plateau_best_state)
-        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
-    elif best_state is not None:
-        model.load_state_dict(best_state)
-        # torch.save(best_state, "./model/185_best.pth")
+                loss_ft = loss_g + loss_im + loss_lmmd
+                opt_ft.zero_grad()
+                loss_ft.backward()
+                opt_ft.step()
+                g_loss_sum += loss_g.item()
+                im_loss_sum += float(loss_im) if torch.is_tensor(loss_im) else loss_im
+                mmd_loss_sum += float(loss_lmmd)
+                ft_loss_sum += float(loss_ft)
+            for p in D.parameters():
+                p.requires_grad = True
+            D.train()
 
-    return model
 
+        # 打印
+        print(
+            f"[ADDA] Ep {epoch + 1}/{num_epochs} | "
+            f"D:{d_loss_sum / max(1, steps * d_steps):.4f} | "
+            f"G(adver):{g_loss_sum / max(1, steps * ft_steps):.4f} | "
+            f"IM:{im_loss_sum / max(1, steps * ft_steps):.4f} | "
+            f"LMMD:{mmd_loss_sum / max(1, steps * ft_steps):.4f} | "
+            f"FT(total):{ft_loss_sum / max(1, steps * ft_steps):.4f} | "
+            f"D-acc:{d_acc_sum / max(1, d_cnt):.4f} | "
+            f"cov:{cov:.2%} margin:{margin_mean:.3f} | loss_lmmd:{float(loss_lmmd):.4f}"
+        )
+
+        print("[INFO] Evaluating on target test set...")
+        target_test_path = '../datasets/target/test/HC_T191_RP.txt'
+        test_dataset = PKLDataset(target_test_path)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        general_test_model(tgt_model, c_dom, test_loader, device)
+
+    return tgt_model
 
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
-        cfg = yaml.safe_load(f)['baseline']
+        cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
     src_path = '../datasets/source/train/DC_T197_RP.txt'
-    tgt_path = '../datasets/target/train/HC_T185_RP.txt'
-    tgt_test = '../datasets/target/test/HC_T185_RP.txt'
+    tgt_path = '../datasets/target/train/HC_T191_RP.txt'
+    tgt_test = '../datasets/target/test/HC_T191_RP.txt'
 
     for run_id in range(5):
-        print(f"\n========== RUN {run_id} ==========")
-
+        print(f"\n========== RUN {run_id} (ADDA) ==========")
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = Flexible_DANN(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                              cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
+
+        # —— 阶段1：建立并训练源域模型 Fs + C （复用 Flexible_DANN 但不使用其域头/GRL）
+        src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
+                                  cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
 
         src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
-        c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
+        optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
+        scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs, eta_min=lr * 0.1)
+        src_cls = nn.CrossEntropyLoss()
 
-        print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
-        model = train_dann_infomax_lmmd(
-            model, src_loader, tgt_loader,
-            optimizer, c_cls, c_dom, device,
-            num_epochs=num_epochs, num_classes=10,
-            pseudo_thresh=0.95,
-            scheduler=scheduler, batch_size=bs,
-            # InfoMax Hyperparameters
-            im_T=1.0, im_weight=0.5, im_marg_w=1.0,
-            lmmd_start_epoch=5, lmmd_t=2
+        print("[INFO] SRC pretrain (Fs + C) ...")
+        pretrain_source_classifier(src_model, src_loader, optimizer_src, src_cls, device,
+                                   num_epochs=max(1, num_epochs//4), scheduler=scheduler_src)
+
+        # —— 阶段2：初始化目标编码器 Ft（从 Fs 拷贝），训练 ADDA（+可选IM/LMMD）
+        tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
+                                  cnn_act='leakrelu', num_classes=10, lambda_=0.0).to(device)
+        copy_encoder_params(src_model, tgt_model, device)
+
+        print("[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...")
+        tgt_model = train_adda_infomax_lmmd(
+            src_model, tgt_model, src_loader, tgt_loader, device,
+            num_epochs=num_epochs, num_classes=10,batch_size=bs,
+            # 判别器/优化器
+            lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,d_steps=1, ft_steps=2,
+            # InfoMax
+            im_T=1.0, im_weight=0.8, im_marg_w=1.0,
+            # LMMD
+            lmmd_start_epoch=5, pseudo_thresh=0.95, T_lmmd=2
         )
+
 
         print("[INFO] Evaluating on target test set...")
         test_ds = PKLDataset(tgt_test)
         test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-        general_test_model(model, c_cls, test_loader, device)
+        general_test_model(tgt_model, src_cls, test_loader, device)
 
-        del model, optimizer, scheduler, src_loader, tgt_loader, test_loader, test_ds
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
+        del src_model, tgt_model, optimizer_src, scheduler_src, src_loader, tgt_loader, test_loader, test_ds
+        if torch.cuda.is_available(): torch.cuda.empty_cache()
