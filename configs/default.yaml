@@ -5,5 +5,25 @@ baseline:
   num_layers: 6
   kernel_size: 15
   start_channels: 8
-  num_epochs: 30
+  num_epochs: 40
+  early_stopping_patience: 3
+
+baseline_2:
+  batch_size: 32
+  learning_rate: 0.0002698732287957219
+  weight_decay: 0.00025692939517131546
+  num_layers: 7
+  kernel_size: 8
+  start_channels: 7
+  num_epochs: 40
+  early_stopping_patience: 3
+
+DANN_LMMD_INFO:
+  batch_size: 32
+  learning_rate: 0.0005198069593116923
+  weight_decay: 0.0003566167033348329
+  num_layers: 6
+  kernel_size: 31
+  start_channels: 4
+  num_epochs: 40
   early_stopping_patience: 3

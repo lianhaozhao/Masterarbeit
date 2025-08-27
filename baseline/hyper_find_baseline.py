@@ -61,7 +61,7 @@ def hyper_optimization(trial):
               based on validation loss, with factor fixed at 0.7 and patience at 3.
     """
 
-    batch_size = trial.suggest_categorical("batch_size", [16, 32, 64])
+    batch_size = trial.suggest_categorical("batch_size", [32])
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 5e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-4, 1e-3, log=True)
     num_layers = trial.suggest_int("num_layers", 3, 7)
@@ -124,7 +124,7 @@ def hyper_optimization(trial):
 if __name__ == '__main__':
     train_dataset = PKLDataset('../datasets/source/train/DC_T197_RP.txt')
     val_dataset = PKLDataset('../datasets/source/validation/DC_T197_RP.txt')
-    out_path = "../datasets/info"
+    out_path = "../datasets/info2"
     os.makedirs(out_path, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     study = optuna.create_study(direction="minimize",

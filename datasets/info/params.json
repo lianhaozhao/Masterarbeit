@@ -268,5 +268,115 @@
         "start_channels": 8,
         "kernel_size": 7,
         "best_val_loss": 0.0006536733288555752
+    },
+    {
+        "trial": 0,
+        "batch_size": 32,
+        "learning_rate": 1.4166864275207904e-05,
+        "weight_decay": 0.00014288270014854078,
+        "num_layers": 7,
+        "start_channels": 8,
+        "kernel_size": 3,
+        "best_val_loss": 0.002526853724589273
+    },
+    {
+        "trial": 1,
+        "batch_size": 32,
+        "learning_rate": 0.003926379078116408,
+        "weight_decay": 0.0007084837188352514,
+        "num_layers": 7,
+        "start_channels": 8,
+        "kernel_size": 15,
+        "best_val_loss": 0.03664356925764878
+    },
+    {
+        "trial": 2,
+        "batch_size": 32,
+        "learning_rate": 8.520014250519495e-05,
+        "weight_decay": 0.0004583025461754614,
+        "num_layers": 6,
+        "start_channels": 8,
+        "kernel_size": 7,
+        "best_val_loss": 0.0025957579507576156
+    },
+    {
+        "trial": 3,
+        "batch_size": 32,
+        "learning_rate": 0.0002698732287957219,
+        "weight_decay": 0.00025692939517131546,
+        "num_layers": 7,
+        "start_channels": 8,
+        "kernel_size": 7,
+        "best_val_loss": 0.00021605164977245295
+    },
+    {
+        "trial": 4,
+        "batch_size": 32,
+        "learning_rate": 0.0005198069593116923,
+        "weight_decay": 0.0003566167033348329,
+        "num_layers": 6,
+        "start_channels": 4,
+        "kernel_size": 31,
+        "best_val_loss": 0.00020256127834272775
+    },
+    {
+        "trial": 13,
+        "batch_size": 32,
+        "learning_rate": 0.00032942016666775146,
+        "weight_decay": 0.0004789188729287949,
+        "num_layers": 6,
+        "start_channels": 4,
+        "kernel_size": 7,
+        "best_val_loss": 0.0013165736394284977
+    },
+    {
+        "trial": 14,
+        "batch_size": 32,
+        "learning_rate": 4.969220896915765e-05,
+        "weight_decay": 0.0003211865376329334,
+        "num_layers": 7,
+        "start_channels": 8,
+        "kernel_size": 7,
+        "best_val_loss": 0.0012438998597872342
+    },
+    {
+        "trial": 22,
+        "batch_size": 32,
+        "learning_rate": 3.172950705671252e-05,
+        "weight_decay": 0.00019217077736868713,
+        "num_layers": 7,
+        "start_channels": 8,
+        "kernel_size": 7,
+        "best_val_loss": 0.0012008069438707025
+    },
+    {
+        "trial": 34,
+        "batch_size": 32,
+        "learning_rate": 0.0001331949087877728,
+        "weight_decay": 0.0002931979927667862,
+        "num_layers": 6,
+        "start_channels": 8,
+        "kernel_size": 15,
+        "best_val_loss": 0.0008629922574527882
+    },
+    {
+        "trial": 72,
+        "batch_size": 32,
+        "learning_rate": 8.943849460565624e-05,
+        "weight_decay": 0.000381259212002081,
+        "num_layers": 6,
+        "start_channels": 8,
+        "kernel_size": 7,
+        "best_val_loss": 0.0005762258361983186
+    },
+    {
+        "trial": 73,
+        "batch_size": 32,
+        "learning_rate": 9.624705391686236e-05,
+        "weight_decay": 0.0003780067898956219,
+        "num_layers": 6,
+        "start_channels": 8,
+        "kernel_size": 7,
+        "best_val_loss": 0.0005365248790667465
     }
 ]

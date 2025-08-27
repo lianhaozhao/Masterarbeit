@@ -17,14 +17,14 @@ def set_seed(seed=42):
 
 def get_dataloaders(source_path, target_path, batch_size):
     src_ds = PKLDataset(txt_path=source_path)
-    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
-    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
+    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True, drop_last=True)
+    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True, drop_last=True)
     return src_loader, tgt_loader
 
 # DANN Lambda Scheduling (GRL only)
-def dann_lambda(epoch, num_epochs, max_lambda=0.5):
+def dann_lambda(epoch, num_epochs, max_lambda=0.35):
     p = epoch / max(1, num_epochs-1)
-    return (2.0 / (1.0 + np.exp(-10 * p)) - 1.0) * max_lambda
+    return (2.0 / (1.0 + np.exp(-7 * p)) - 1.0) * max_lambda
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
@@ -234,10 +234,10 @@ def train_dann_infomax_lmmd(model,
                             # InfoMax
                             im_T=1.0, im_weight=0.5, im_marg_w=1.0,
                             # Gating
-                            lmmd_start_epoch=5,
+                            lmmd_start_epoch=5,lmmd_t=1
                             ):
     # Hyperparameters related to early stopping
-    W = 4
+    W = 5
     GAP_TH = 0.05  # DomAcc distance threshold of 0.5 (the smaller the better alignment)
     PATIENCE = 3  # Stop after several rounds without improvement
 
@@ -258,7 +258,7 @@ def train_dann_infomax_lmmd(model,
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, target_loader, device, threshold=pseudo_thresh, T=1.0
+                model, target_loader, device, threshold=pseudo_thresh, T=lmmd_t
             )
             kept, total = stats["kept"], stats["total"]
             cov, margin_mean = stats["coverage"], stats["margin_mean"]
@@ -267,7 +267,7 @@ def train_dann_infomax_lmmd(model,
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
 
         # 2) Gated LMMD weights
-        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=lmmd_start_epoch)
+        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=12e-2, start_epoch=lmmd_start_epoch)
         # Quality q: Linearly normalize margin (0.05-0.5) and couple it with coverage (concave, to avoid high coverage but poor quality)
         def _lin(x, lo, hi):
             return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
@@ -275,6 +275,7 @@ def train_dann_infomax_lmmd(model,
         q_cov = math.sqrt(max(0.0, cov))  # concave
         q = q_margin * q_cov
         lambda_mmd_eff = lambda_mmd_base * q
+        # lambda_mmd_eff = max(0.015,lambda_mmd_base * q)
 
         # 3) epoch training
         model.train()
@@ -341,7 +342,7 @@ def train_dann_infomax_lmmd(model,
                 feat_tgt_pl_n = F.normalize(feat_tgt_pl, dim=1)
                 loss_lmmd = classwise_mmd_biased_weighted(
                     feat_src_n, src_y, feat_tgt_pl_n, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=2
+                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=3
                 )
                 loss_lmmd = lambda_mmd_eff * loss_lmmd
             else:
@@ -411,63 +412,81 @@ def train_dann_infomax_lmmd(model,
                     # Prioritize backloading the "plateau optimal"; otherwise, backloading the "global optimal"
                     if plateau_best_state is not None:
                         model.load_state_dict(plateau_best_state)
-                        torch.save(plateau_best_state, "./model/191_plateau_best.pth")
+                        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
                     elif best_state is not None:
                         model.load_state_dict(best_state)
-                        torch.save(best_state, "./model/191_best.pth")
+                        # torch.save(best_state, "./model/185_best.pth")
                     break
             else:
 
                 patience = 0
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T194_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(model, criterion_cls, test_loader, device)
+        # print("[INFO] Evaluating on target test set...")
+        # target_test_path = '../datasets/target/test/HC_T191_RP.txt'
+        # test_dataset = PKLDataset(target_test_path)
+        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        # general_test_model(model, criterion_cls, test_loader, device)
 
     if plateau_best_state is not None:
         model.load_state_dict(plateau_best_state)
-        torch.save(plateau_best_state, "./model/191_plateau_best.pth")
+        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
     elif best_state is not None:
         model.load_state_dict(best_state)
-        torch.save(best_state, "./model/191_best.pth")
+        # torch.save(best_state, "./model/185_best.pth")
 
     return model
 
 
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
-        cfg = yaml.safe_load(f)['baseline']
-    bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
-    num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
+        cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
+    bs = cfg['batch_size']
+    lr = cfg['learning_rate']
+    wd = cfg['weight_decay']
+    num_layers = cfg['num_layers']
+    ksz = cfg['kernel_size']
+    sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
-    src_path = '../datasets/source/train/DC_T197_RP.txt'
-    tgt_path = '../datasets/target/train/HC_T194_RP.txt'
-    tgt_test = '../datasets/target/test/HC_T194_RP.txt'
+    files = [188]
+    # files = [185, 188, 191, 194, 197]
+    for file in files:
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = Flexible_DANN(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                          cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
+        src_path = '../datasets/source/train/DC_T197_RP.txt'
+        tgt_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
+        tgt_test = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
 
-    src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
-    c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
+        print(f"[INFO] Loading HC_T{file} ...")
 
-    print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
-    model = train_dann_infomax_lmmd(
-        model, src_loader, tgt_loader,
-        optimizer, c_cls, c_dom, device,
-        num_epochs=num_epochs, num_classes=10,
-        pseudo_thresh=0.95,
-        scheduler=scheduler, batch_size=bs,
-        # InfoMax Hyperparameters
-        im_T=1.0, im_weight=0.5, im_marg_w=1.0,
-        lmmd_start_epoch=5,
-    )
+        for run_id in range(5):
+            print(f"\n========== RUN {run_id} ==========")
 
-    print("[INFO] Evaluating on target test set...")
-    test_ds = PKLDataset(tgt_test)
-    test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-    general_test_model(model, c_cls, test_loader, device)
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = Flexible_DANN(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
+                                  cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
+
+            src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
+            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
+            c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
+
+            print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
+            model = train_dann_infomax_lmmd(
+                model, src_loader, tgt_loader,
+                optimizer, c_cls, c_dom, device,
+                num_epochs=num_epochs, num_classes=10,
+                pseudo_thresh=0.95,
+                scheduler=scheduler, batch_size=bs,
+                # InfoMax Hyperparameters
+                im_T=1.0, im_weight=0.5, im_marg_w=1.0,
+                lmmd_start_epoch=5, lmmd_t=2
+            )
+
+            print("[INFO] Evaluating on target test set...")
+            test_ds = PKLDataset(tgt_test)
+            test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
+            general_test_model(model, c_cls, test_loader, device)
+
+            del model, optimizer, scheduler, src_loader, tgt_loader, test_loader, test_ds
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+

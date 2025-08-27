@@ -1,0 +1,246 @@
+C:\Users\15185\anaconda3\envs\Masterarbeit\python.exe D:\Masterarbeit\method_DANN\m_DANN_LMMD_Infomax_1.py
+
+========== RUN 0 ==========
+[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...
+[Epoch 1] Total loss:-0.1680 | Avg cls loss:0.4564 | avg Dom loss:0.0962 | avg IM loss:-0.7207 | avg LMMD loss:0.0000 | DomAcc:0.9619 | cov:0.00% margin:0.000 | λ_GRL:0.0000 | λ_mmd_eff:0.0000
+[Epoch 2] Total loss:-0.7299 | Avg cls loss:0.1170 | avg Dom loss:0.0027 | avg IM loss:-0.8494 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.0320 | λ_mmd_eff:0.0000
+[Epoch 3] Total loss:-0.8573 | Avg cls loss:0.0473 | avg Dom loss:0.0009 | avg IM loss:-0.9057 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.0638 | λ_mmd_eff:0.0000
+[Epoch 4] Total loss:-0.8742 | Avg cls loss:0.0396 | avg Dom loss:0.0047 | avg IM loss:-0.9185 | avg LMMD loss:0.0000 | DomAcc:0.9995 | cov:0.00% margin:0.000 | λ_GRL:0.0950 | λ_mmd_eff:0.0000
+[Epoch 5] Total loss:-0.8920 | Avg cls loss:0.0331 | avg Dom loss:0.0015 | avg IM loss:-0.9266 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.1255 | λ_mmd_eff:0.0000
+[Epoch 6] Total loss:-0.9115 | Avg cls loss:0.0150 | avg Dom loss:0.0004 | avg IM loss:-0.9276 | avg LMMD loss:0.0008 | DomAcc:1.0000 | cov:82.73% margin:0.975 | λ_GRL:0.1550 | λ_mmd_eff:0.0007
+[Epoch 7] Total loss:-0.7619 | Avg cls loss:0.0564 | avg Dom loss:0.1095 | avg IM loss:-0.9285 | avg LMMD loss:0.0006 | DomAcc:0.9645 | cov:67.60% margin:0.974 | λ_GRL:0.1834 | λ_mmd_eff:0.0009
+[Epoch 8] Total loss:-0.7478 | Avg cls loss:0.0333 | avg Dom loss:0.1426 | avg IM loss:-0.9246 | avg LMMD loss:0.0009 | DomAcc:0.9554 | cov:73.70% margin:0.968 | λ_GRL:0.2104 | λ_mmd_eff:0.0012
+[Epoch 9] Total loss:-0.6170 | Avg cls loss:0.0511 | avg Dom loss:0.2536 | avg IM loss:-0.9231 | avg LMMD loss:0.0013 | DomAcc:0.8993 | cov:86.42% margin:0.973 | λ_GRL:0.2361 | λ_mmd_eff:0.0018
+[Epoch 10] Total loss:-0.5218 | Avg cls loss:0.0391 | avg Dom loss:0.3689 | avg IM loss:-0.9306 | avg LMMD loss:0.0009 | DomAcc:0.8486 | cov:38.38% margin:0.957 | λ_GRL:0.2602 | λ_mmd_eff:0.0016
+[Epoch 11] Total loss:-0.4442 | Avg cls loss:0.0456 | avg Dom loss:0.4386 | avg IM loss:-0.9303 | avg LMMD loss:0.0019 | DomAcc:0.7990 | cov:68.00% margin:0.967 | λ_GRL:0.2828 | λ_mmd_eff:0.0028
+[Epoch 12] Total loss:-0.4312 | Avg cls loss:0.0437 | avg Dom loss:0.4488 | avg IM loss:-0.9264 | avg LMMD loss:0.0027 | DomAcc:0.7965 | cov:74.78% margin:0.968 | λ_GRL:0.3038 | λ_mmd_eff:0.0039
+[Epoch 13] Total loss:-0.4209 | Avg cls loss:0.0371 | avg Dom loss:0.4708 | avg IM loss:-0.9331 | avg LMMD loss:0.0043 | DomAcc:0.7657 | cov:82.93% margin:0.973 | λ_GRL:0.3232 | λ_mmd_eff:0.0055
+[Epoch 14] Total loss:-0.3608 | Avg cls loss:0.0308 | avg Dom loss:0.5357 | avg IM loss:-0.9320 | avg LMMD loss:0.0047 | DomAcc:0.7220 | cov:88.33% margin:0.977 | λ_GRL:0.3411 | λ_mmd_eff:0.0075
+[Epoch 15] Total loss:-0.3452 | Avg cls loss:0.0232 | avg Dom loss:0.5601 | avg IM loss:-0.9346 | avg LMMD loss:0.0061 | DomAcc:0.7029 | cov:80.33% margin:0.970 | λ_GRL:0.3575 | λ_mmd_eff:0.0093
+[Epoch 16] Total loss:-0.3589 | Avg cls loss:0.0296 | avg Dom loss:0.5385 | avg IM loss:-0.9361 | avg LMMD loss:0.0090 | DomAcc:0.7218 | cov:81.73% margin:0.976 | λ_GRL:0.3725 | λ_mmd_eff:0.0123
+[Epoch 17] Total loss:-0.3237 | Avg cls loss:0.0269 | avg Dom loss:0.5816 | avg IM loss:-0.9424 | avg LMMD loss:0.0101 | DomAcc:0.6868 | cov:86.85% margin:0.975 | λ_GRL:0.3861 | λ_mmd_eff:0.0164
+[Epoch 18] Total loss:-0.3137 | Avg cls loss:0.0298 | avg Dom loss:0.5827 | avg IM loss:-0.9400 | avg LMMD loss:0.0137 | DomAcc:0.6874 | cov:85.08% margin:0.975 | λ_GRL:0.3984 | λ_mmd_eff:0.0207
+[Epoch 19] Total loss:-0.3058 | Avg cls loss:0.0169 | avg Dom loss:0.6075 | avg IM loss:-0.9480 | avg LMMD loss:0.0179 | DomAcc:0.6544 | cov:86.67% margin:0.978 | λ_GRL:0.4095 | λ_mmd_eff:0.0263
+[Epoch 20] Total loss:-0.2652 | Avg cls loss:0.0292 | avg Dom loss:0.6257 | avg IM loss:-0.9406 | avg LMMD loss:0.0205 | DomAcc:0.6472 | cov:89.53% margin:0.979 | λ_GRL:0.4195 | λ_mmd_eff:0.0332
+[Epoch 21] Total loss:-0.3100 | Avg cls loss:0.0142 | avg Dom loss:0.5968 | avg IM loss:-0.9474 | avg LMMD loss:0.0264 | DomAcc:0.6711 | cov:90.83% margin:0.981 | λ_GRL:0.4285 | λ_mmd_eff:0.0408
+[Epoch 22] Total loss:-0.2856 | Avg cls loss:0.0165 | avg Dom loss:0.6181 | avg IM loss:-0.9490 | avg LMMD loss:0.0288 | DomAcc:0.6610 | cov:87.92% margin:0.980 | λ_GRL:0.4366 | λ_mmd_eff:0.0480
+[Epoch 23] Total loss:-0.2576 | Avg cls loss:0.0180 | avg Dom loss:0.6334 | avg IM loss:-0.9460 | avg LMMD loss:0.0370 | DomAcc:0.6389 | cov:89.30% margin:0.981 | λ_GRL:0.4438 | λ_mmd_eff:0.0567
+[Epoch 24] Total loss:-0.2579 | Avg cls loss:0.0116 | avg Dom loss:0.6390 | avg IM loss:-0.9423 | avg LMMD loss:0.0339 | DomAcc:0.6366 | cov:89.12% margin:0.984 | λ_GRL:0.4502 | λ_mmd_eff:0.0649
+[Epoch 25] Total loss:-0.2417 | Avg cls loss:0.0140 | avg Dom loss:0.6471 | avg IM loss:-0.9529 | avg LMMD loss:0.0501 | DomAcc:0.6281 | cov:92.12% margin:0.983 | λ_GRL:0.4559 | λ_mmd_eff:0.0741
+[Epoch 26] Total loss:-0.2286 | Avg cls loss:0.0113 | avg Dom loss:0.6603 | avg IM loss:-0.9477 | avg LMMD loss:0.0476 | DomAcc:0.5984 | cov:90.03% margin:0.982 | λ_GRL:0.4610 | λ_mmd_eff:0.0805
+[Epoch 27] Total loss:-0.2246 | Avg cls loss:0.0191 | avg Dom loss:0.6459 | avg IM loss:-0.9504 | avg LMMD loss:0.0609 | DomAcc:0.6380 | cov:90.40% margin:0.984 | λ_GRL:0.4656 | λ_mmd_eff:0.0872
+[Epoch 28] Total loss:-0.2313 | Avg cls loss:0.0061 | avg Dom loss:0.6580 | avg IM loss:-0.9515 | avg LMMD loss:0.0560 | DomAcc:0.6066 | cov:87.05% margin:0.980 | λ_GRL:0.4696 | λ_mmd_eff:0.0910
+[Epoch 29] Total loss:-0.2183 | Avg cls loss:0.0134 | avg Dom loss:0.6625 | avg IM loss:-0.9516 | avg LMMD loss:0.0574 | DomAcc:0.5990 | cov:95.03% margin:0.987 | λ_GRL:0.4731 | λ_mmd_eff:0.0999
+[Epoch 30] Total loss:-0.2094 | Avg cls loss:0.0075 | avg Dom loss:0.6654 | avg IM loss:-0.9491 | avg LMMD loss:0.0669 | DomAcc:0.6161 | cov:93.75% margin:0.987 | λ_GRL:0.4763 | λ_mmd_eff:0.1030
+[Epoch 31] Total loss:-0.2196 | Avg cls loss:0.0072 | avg Dom loss:0.6663 | avg IM loss:-0.9568 | avg LMMD loss:0.0637 | DomAcc:0.5944 | cov:92.33% margin:0.985 | λ_GRL:0.4791 | λ_mmd_eff:0.1053
+[Epoch 32] Total loss:-0.2120 | Avg cls loss:0.0015 | avg Dom loss:0.6689 | avg IM loss:-0.9483 | avg LMMD loss:0.0659 | DomAcc:0.5925 | cov:95.00% margin:0.988 | λ_GRL:0.4816 | λ_mmd_eff:0.1092
+[Epoch 33] Total loss:-0.1897 | Avg cls loss:0.0027 | avg Dom loss:0.6760 | avg IM loss:-0.9490 | avg LMMD loss:0.0807 | DomAcc:0.5874 | cov:95.30% margin:0.989 | λ_GRL:0.4837 | λ_mmd_eff:0.1113
+[Epoch 34] Total loss:-0.2115 | Avg cls loss:0.0027 | avg Dom loss:0.6772 | avg IM loss:-0.9581 | avg LMMD loss:0.0667 | DomAcc:0.5802 | cov:95.53% margin:0.987 | λ_GRL:0.4857 | λ_mmd_eff:0.1128
+[Epoch 35] Total loss:-0.2258 | Avg cls loss:0.0053 | avg Dom loss:0.6785 | avg IM loss:-0.9746 | avg LMMD loss:0.0651 | DomAcc:0.5745 | cov:91.42% margin:0.989 | λ_GRL:0.4874 | λ_mmd_eff:0.1115
+[Epoch 36] Total loss:-0.2292 | Avg cls loss:0.0008 | avg Dom loss:0.6802 | avg IM loss:-0.9803 | avg LMMD loss:0.0701 | DomAcc:0.5659 | cov:92.70% margin:0.985 | λ_GRL:0.4889 | λ_mmd_eff:0.1131
+[Epoch 37] Total loss:-0.2235 | Avg cls loss:0.0008 | avg Dom loss:0.6901 | avg IM loss:-0.9881 | avg LMMD loss:0.0738 | DomAcc:0.5326 | cov:95.85% margin:0.989 | λ_GRL:0.4902 | λ_mmd_eff:0.1156
+[Epoch 38] Total loss:-0.2010 | Avg cls loss:0.0049 | avg Dom loss:0.6928 | avg IM loss:-0.9732 | avg LMMD loss:0.0745 | DomAcc:0.5158 | cov:97.30% margin:0.991 | λ_GRL:0.4914 | λ_mmd_eff:0.1169
+[Epoch 39] Total loss:-0.2147 | Avg cls loss:0.0016 | avg Dom loss:0.6844 | avg IM loss:-0.9768 | avg LMMD loss:0.0761 | DomAcc:0.5536 | cov:96.15% margin:0.988 | λ_GRL:0.4924 | λ_mmd_eff:0.1166
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9232
+[Epoch 40] Total loss:-0.2101 | Avg cls loss:0.0019 | avg Dom loss:0.6913 | avg IM loss:-0.9792 | avg LMMD loss:0.0757 | DomAcc:0.5254 | cov:97.32% margin:0.992 | λ_GRL:0.4933 | λ_mmd_eff:0.1176
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9537
+[INFO] Evaluating on target test set...
+- test Loss: 6.377212, test Acc: 0.5584
+
+========== RUN 1 ==========
+[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...
+[Epoch 1] Total loss:-0.1449 | Avg cls loss:0.4539 | avg Dom loss:0.1152 | avg IM loss:-0.7139 | avg LMMD loss:0.0000 | DomAcc:0.9574 | cov:0.00% margin:0.000 | λ_GRL:0.0000 | λ_mmd_eff:0.0000
+[Epoch 2] Total loss:-0.8169 | Avg cls loss:0.0779 | avg Dom loss:0.0155 | avg IM loss:-0.9102 | avg LMMD loss:0.0000 | DomAcc:0.9959 | cov:0.00% margin:0.000 | λ_GRL:0.0320 | λ_mmd_eff:0.0000
+[Epoch 3] Total loss:-0.8569 | Avg cls loss:0.0545 | avg Dom loss:0.0099 | avg IM loss:-0.9213 | avg LMMD loss:0.0000 | DomAcc:0.9986 | cov:0.00% margin:0.000 | λ_GRL:0.0638 | λ_mmd_eff:0.0000
+[Epoch 4] Total loss:-0.7748 | Avg cls loss:0.0475 | avg Dom loss:0.1143 | avg IM loss:-0.9366 | avg LMMD loss:0.0000 | DomAcc:0.9622 | cov:0.00% margin:0.000 | λ_GRL:0.0950 | λ_mmd_eff:0.0000
+[Epoch 5] Total loss:-0.6677 | Avg cls loss:0.0539 | avg Dom loss:0.2090 | avg IM loss:-0.9305 | avg LMMD loss:0.0000 | DomAcc:0.9133 | cov:0.00% margin:0.000 | λ_GRL:0.1255 | λ_mmd_eff:0.0000
+[Epoch 6] Total loss:-0.6149 | Avg cls loss:0.0520 | avg Dom loss:0.2643 | avg IM loss:-0.9319 | avg LMMD loss:0.0007 | DomAcc:0.8813 | cov:62.30% margin:0.964 | λ_GRL:0.1550 | λ_mmd_eff:0.0006
+[Epoch 7] Total loss:-0.6188 | Avg cls loss:0.0337 | avg Dom loss:0.2911 | avg IM loss:-0.9444 | avg LMMD loss:0.0008 | DomAcc:0.8623 | cov:80.10% margin:0.972 | λ_GRL:0.1834 | λ_mmd_eff:0.0010
+[Epoch 8] Total loss:-0.5411 | Avg cls loss:0.0442 | avg Dom loss:0.3573 | avg IM loss:-0.9434 | avg LMMD loss:0.0008 | DomAcc:0.8241 | cov:86.58% margin:0.975 | λ_GRL:0.2104 | λ_mmd_eff:0.0013
+[Epoch 9] Total loss:-0.5064 | Avg cls loss:0.0457 | avg Dom loss:0.3949 | avg IM loss:-0.9483 | avg LMMD loss:0.0012 | DomAcc:0.7951 | cov:73.78% margin:0.968 | λ_GRL:0.2361 | λ_mmd_eff:0.0017
+[Epoch 10] Total loss:-0.4281 | Avg cls loss:0.0411 | avg Dom loss:0.4773 | avg IM loss:-0.9480 | avg LMMD loss:0.0014 | DomAcc:0.7449 | cov:76.85% margin:0.966 | λ_GRL:0.2602 | λ_mmd_eff:0.0022
+[Epoch 11] Total loss:-0.3736 | Avg cls loss:0.0412 | avg Dom loss:0.5480 | avg IM loss:-0.9649 | avg LMMD loss:0.0020 | DomAcc:0.6944 | cov:80.40% margin:0.974 | λ_GRL:0.2828 | λ_mmd_eff:0.0031
+[Epoch 12] Total loss:-0.3285 | Avg cls loss:0.0293 | avg Dom loss:0.5989 | avg IM loss:-0.9595 | avg LMMD loss:0.0029 | DomAcc:0.6489 | cov:82.78% margin:0.972 | λ_GRL:0.3038 | λ_mmd_eff:0.0041
+[Epoch 13] Total loss:-0.2961 | Avg cls loss:0.0425 | avg Dom loss:0.6108 | avg IM loss:-0.9539 | avg LMMD loss:0.0045 | DomAcc:0.6504 | cov:86.78% margin:0.972 | λ_GRL:0.3232 | λ_mmd_eff:0.0056
+[Epoch 14] Total loss:-0.3195 | Avg cls loss:0.0227 | avg Dom loss:0.6164 | avg IM loss:-0.9640 | avg LMMD loss:0.0054 | DomAcc:0.6492 | cov:82.80% margin:0.970 | λ_GRL:0.3411 | λ_mmd_eff:0.0072
+[Epoch 15] Total loss:-0.3072 | Avg cls loss:0.0303 | avg Dom loss:0.6223 | avg IM loss:-0.9658 | avg LMMD loss:0.0060 | DomAcc:0.6364 | cov:75.40% margin:0.971 | λ_GRL:0.3575 | λ_mmd_eff:0.0090
+[Epoch 16] Total loss:-0.3111 | Avg cls loss:0.0283 | avg Dom loss:0.6249 | avg IM loss:-0.9724 | avg LMMD loss:0.0081 | DomAcc:0.6395 | cov:82.35% margin:0.971 | λ_GRL:0.3725 | λ_mmd_eff:0.0123
+[Epoch 17] Total loss:-0.2586 | Avg cls loss:0.0228 | avg Dom loss:0.6774 | avg IM loss:-0.9694 | avg LMMD loss:0.0105 | DomAcc:0.5733 | cov:87.38% margin:0.978 | λ_GRL:0.3861 | λ_mmd_eff:0.0164
+[Epoch 18] Total loss:-0.2757 | Avg cls loss:0.0127 | avg Dom loss:0.6734 | avg IM loss:-0.9738 | avg LMMD loss:0.0120 | DomAcc:0.5788 | cov:92.42% margin:0.981 | λ_GRL:0.3984 | λ_mmd_eff:0.0216
+[Epoch 19] Total loss:-0.2731 | Avg cls loss:0.0054 | avg Dom loss:0.6806 | avg IM loss:-0.9786 | avg LMMD loss:0.0195 | DomAcc:0.5541 | cov:93.30% margin:0.983 | λ_GRL:0.4095 | λ_mmd_eff:0.0273
+[Epoch 20] Total loss:-0.2446 | Avg cls loss:0.0253 | avg Dom loss:0.6781 | avg IM loss:-0.9721 | avg LMMD loss:0.0240 | DomAcc:0.5658 | cov:92.03% margin:0.982 | λ_GRL:0.4195 | λ_mmd_eff:0.0337
+[Epoch 21] Total loss:-0.2541 | Avg cls loss:0.0164 | avg Dom loss:0.6858 | avg IM loss:-0.9810 | avg LMMD loss:0.0248 | DomAcc:0.5433 | cov:94.62% margin:0.984 | λ_GRL:0.4285 | λ_mmd_eff:0.0417
+[Epoch 22] Total loss:-0.2546 | Avg cls loss:0.0094 | avg Dom loss:0.6779 | avg IM loss:-0.9763 | avg LMMD loss:0.0344 | DomAcc:0.5811 | cov:93.90% margin:0.981 | λ_GRL:0.4366 | λ_mmd_eff:0.0497
+[Epoch 23] Total loss:-0.2572 | Avg cls loss:0.0109 | avg Dom loss:0.6712 | avg IM loss:-0.9781 | avg LMMD loss:0.0388 | DomAcc:0.5928 | cov:92.45% margin:0.981 | λ_GRL:0.4438 | λ_mmd_eff:0.0577
+[Epoch 24] Total loss:-0.2174 | Avg cls loss:0.0089 | avg Dom loss:0.7005 | avg IM loss:-0.9706 | avg LMMD loss:0.0437 | DomAcc:0.4982 | cov:93.73% margin:0.984 | λ_GRL:0.4502 | λ_mmd_eff:0.0666
+[Epoch 25] Total loss:-0.2387 | Avg cls loss:0.0094 | avg Dom loss:0.6850 | avg IM loss:-0.9802 | avg LMMD loss:0.0471 | DomAcc:0.5528 | cov:94.95% margin:0.986 | λ_GRL:0.4559 | λ_mmd_eff:0.0752
+[Epoch 26] Total loss:-0.2248 | Avg cls loss:0.0107 | avg Dom loss:0.6888 | avg IM loss:-0.9719 | avg LMMD loss:0.0476 | DomAcc:0.5315 | cov:96.12% margin:0.985 | λ_GRL:0.4610 | λ_mmd_eff:0.0832
+[Epoch 27] Total loss:-0.2217 | Avg cls loss:0.0036 | avg Dom loss:0.6893 | avg IM loss:-0.9755 | avg LMMD loss:0.0608 | DomAcc:0.5327 | cov:95.08% margin:0.985 | λ_GRL:0.4656 | λ_mmd_eff:0.0894
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9428
+[Epoch 28] Total loss:-0.2380 | Avg cls loss:0.0055 | avg Dom loss:0.6867 | avg IM loss:-0.9833 | avg LMMD loss:0.0530 | DomAcc:0.5455 | cov:93.70% margin:0.985 | λ_GRL:0.4696 | λ_mmd_eff:0.0945
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9378
+[Epoch 29] Total loss:-0.2280 | Avg cls loss:0.0027 | avg Dom loss:0.6886 | avg IM loss:-0.9865 | avg LMMD loss:0.0672 | DomAcc:0.5418 | cov:96.78% margin:0.988 | λ_GRL:0.4731 | λ_mmd_eff:0.1008
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9447
+[Epoch 30] Total loss:-0.2013 | Avg cls loss:0.0040 | avg Dom loss:0.6941 | avg IM loss:-0.9792 | avg LMMD loss:0.0798 | DomAcc:0.5143 | cov:97.52% margin:0.989 | λ_GRL:0.4763 | λ_mmd_eff:0.1051
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9649
+[Epoch 31] Total loss:-0.2182 | Avg cls loss:0.0028 | avg Dom loss:0.6902 | avg IM loss:-0.9874 | avg LMMD loss:0.0762 | DomAcc:0.5292 | cov:96.80% margin:0.987 | λ_GRL:0.4791 | λ_mmd_eff:0.1078
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9582
+[Epoch 32] Total loss:-0.2158 | Avg cls loss:0.0019 | avg Dom loss:0.6919 | avg IM loss:-0.9866 | avg LMMD loss:0.0770 | DomAcc:0.5137 | cov:97.10% margin:0.988 | λ_GRL:0.4816 | λ_mmd_eff:0.1104
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9729
+[Epoch 33] Total loss:-0.2120 | Avg cls loss:0.0036 | avg Dom loss:0.6902 | avg IM loss:-0.9845 | avg LMMD loss:0.0787 | DomAcc:0.5351 | cov:97.90% margin:0.989 | λ_GRL:0.4837 | λ_mmd_eff:0.1128
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9494
+[Epoch 34] Total loss:-0.2080 | Avg cls loss:0.0042 | avg Dom loss:0.6912 | avg IM loss:-0.9767 | avg LMMD loss:0.0733 | DomAcc:0.5141 | cov:95.17% margin:0.985 | λ_GRL:0.4857 | λ_mmd_eff:0.1126
+[EARLY-STOP] patience 2/3 | gap_ok=True | score=-0.9626
+[Epoch 35] Total loss:-0.2400 | Avg cls loss:0.0012 | avg Dom loss:0.6849 | avg IM loss:-0.9860 | avg LMMD loss:0.0599 | DomAcc:0.5636 | cov:98.15% margin:0.989 | λ_GRL:0.4874 | λ_mmd_eff:0.1155
+[EARLY-STOP] patience 3/3 | gap_ok=True | score=-0.9224
+[EARLY-STOP] Stopping: stable alignment and no score improvement.
+[INFO] Evaluating on target test set...
+- test Loss: 5.421021, test Acc: 0.5792
+
+========== RUN 2 ==========
+[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...
+[Epoch 1] Total loss:-0.3451 | Avg cls loss:0.3307 | avg Dom loss:0.0625 | avg IM loss:-0.7382 | avg LMMD loss:0.0000 | DomAcc:0.9736 | cov:0.00% margin:0.000 | λ_GRL:0.0000 | λ_mmd_eff:0.0000
+[Epoch 2] Total loss:-0.8303 | Avg cls loss:0.0537 | avg Dom loss:0.0034 | avg IM loss:-0.8875 | avg LMMD loss:0.0000 | DomAcc:0.9999 | cov:0.00% margin:0.000 | λ_GRL:0.0320 | λ_mmd_eff:0.0000
+[Epoch 3] Total loss:-0.8865 | Avg cls loss:0.0388 | avg Dom loss:0.0010 | avg IM loss:-0.9262 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.0638 | λ_mmd_eff:0.0000
+[Epoch 4] Total loss:-0.8993 | Avg cls loss:0.0355 | avg Dom loss:0.0040 | avg IM loss:-0.9387 | avg LMMD loss:0.0000 | DomAcc:0.9995 | cov:0.00% margin:0.000 | λ_GRL:0.0950 | λ_mmd_eff:0.0000
+[Epoch 5] Total loss:-0.9009 | Avg cls loss:0.0271 | avg Dom loss:0.0046 | avg IM loss:-0.9325 | avg LMMD loss:0.0000 | DomAcc:0.9995 | cov:0.00% margin:0.000 | λ_GRL:0.1255 | λ_mmd_eff:0.0000
+[Epoch 6] Total loss:-0.7783 | Avg cls loss:0.0376 | avg Dom loss:0.1169 | avg IM loss:-0.9337 | avg LMMD loss:0.0009 | DomAcc:0.9605 | cov:86.83% margin:0.977 | λ_GRL:0.1550 | λ_mmd_eff:0.0007
+[Epoch 7] Total loss:-0.7317 | Avg cls loss:0.0307 | avg Dom loss:0.1873 | avg IM loss:-0.9504 | avg LMMD loss:0.0007 | DomAcc:0.9250 | cov:89.38% margin:0.977 | λ_GRL:0.1834 | λ_mmd_eff:0.0010
+[Epoch 8] Total loss:-0.5881 | Avg cls loss:0.0427 | avg Dom loss:0.3115 | avg IM loss:-0.9434 | avg LMMD loss:0.0010 | DomAcc:0.8564 | cov:87.85% margin:0.976 | λ_GRL:0.2104 | λ_mmd_eff:0.0013
+[Epoch 9] Total loss:-0.4672 | Avg cls loss:0.0480 | avg Dom loss:0.4217 | avg IM loss:-0.9383 | avg LMMD loss:0.0013 | DomAcc:0.7938 | cov:82.38% margin:0.971 | λ_GRL:0.2361 | λ_mmd_eff:0.0017
+[Epoch 10] Total loss:-0.3982 | Avg cls loss:0.0361 | avg Dom loss:0.5084 | avg IM loss:-0.9444 | avg LMMD loss:0.0017 | DomAcc:0.7318 | cov:76.90% margin:0.974 | λ_GRL:0.2602 | λ_mmd_eff:0.0023
+[Epoch 11] Total loss:-0.3722 | Avg cls loss:0.0258 | avg Dom loss:0.5490 | avg IM loss:-0.9494 | avg LMMD loss:0.0023 | DomAcc:0.6988 | cov:82.83% margin:0.976 | λ_GRL:0.2828 | λ_mmd_eff:0.0031
+[Epoch 12] Total loss:-0.3239 | Avg cls loss:0.0309 | avg Dom loss:0.5881 | avg IM loss:-0.9459 | avg LMMD loss:0.0030 | DomAcc:0.6660 | cov:89.03% margin:0.978 | λ_GRL:0.3038 | λ_mmd_eff:0.0043
+[Epoch 13] Total loss:-0.3215 | Avg cls loss:0.0397 | avg Dom loss:0.5756 | avg IM loss:-0.9408 | avg LMMD loss:0.0039 | DomAcc:0.6750 | cov:88.17% margin:0.975 | λ_GRL:0.3232 | λ_mmd_eff:0.0057
+[Epoch 14] Total loss:-0.2782 | Avg cls loss:0.0323 | avg Dom loss:0.6012 | avg IM loss:-0.9167 | avg LMMD loss:0.0050 | DomAcc:0.6602 | cov:86.72% margin:0.974 | λ_GRL:0.3411 | λ_mmd_eff:0.0074
+[Epoch 15] Total loss:-0.2698 | Avg cls loss:0.0350 | avg Dom loss:0.6489 | avg IM loss:-0.9599 | avg LMMD loss:0.0062 | DomAcc:0.6175 | cov:77.22% margin:0.970 | λ_GRL:0.3575 | λ_mmd_eff:0.0092
+[Epoch 16] Total loss:-0.2864 | Avg cls loss:0.0171 | avg Dom loss:0.6360 | avg IM loss:-0.9466 | avg LMMD loss:0.0072 | DomAcc:0.6324 | cov:86.42% margin:0.976 | λ_GRL:0.3725 | λ_mmd_eff:0.0126
+[Epoch 17] Total loss:-0.2684 | Avg cls loss:0.0235 | avg Dom loss:0.6549 | avg IM loss:-0.9571 | avg LMMD loss:0.0105 | DomAcc:0.6095 | cov:88.08% margin:0.981 | λ_GRL:0.3861 | λ_mmd_eff:0.0165
+[Epoch 18] Total loss:-0.2472 | Avg cls loss:0.0301 | avg Dom loss:0.6727 | avg IM loss:-0.9645 | avg LMMD loss:0.0145 | DomAcc:0.5944 | cov:88.42% margin:0.980 | λ_GRL:0.3984 | λ_mmd_eff:0.0211
+[Epoch 19] Total loss:-0.2752 | Avg cls loss:0.0127 | avg Dom loss:0.6692 | avg IM loss:-0.9723 | avg LMMD loss:0.0153 | DomAcc:0.5945 | cov:83.83% margin:0.976 | λ_GRL:0.4095 | λ_mmd_eff:0.0259
+[Epoch 20] Total loss:-0.2527 | Avg cls loss:0.0227 | avg Dom loss:0.6706 | avg IM loss:-0.9686 | avg LMMD loss:0.0226 | DomAcc:0.5958 | cov:91.50% margin:0.984 | λ_GRL:0.4195 | λ_mmd_eff:0.0336
+[Epoch 21] Total loss:-0.2506 | Avg cls loss:0.0084 | avg Dom loss:0.6855 | avg IM loss:-0.9717 | avg LMMD loss:0.0272 | DomAcc:0.5587 | cov:92.40% margin:0.983 | λ_GRL:0.4285 | λ_mmd_eff:0.0412
+[Epoch 22] Total loss:-0.2665 | Avg cls loss:0.0089 | avg Dom loss:0.6746 | avg IM loss:-0.9803 | avg LMMD loss:0.0303 | DomAcc:0.5851 | cov:94.53% margin:0.987 | λ_GRL:0.4366 | λ_mmd_eff:0.0498
+[Epoch 23] Total loss:-0.2392 | Avg cls loss:0.0142 | avg Dom loss:0.6812 | avg IM loss:-0.9689 | avg LMMD loss:0.0344 | DomAcc:0.5672 | cov:94.53% margin:0.987 | λ_GRL:0.4438 | λ_mmd_eff:0.0583
+[Epoch 24] Total loss:-0.2313 | Avg cls loss:0.0114 | avg Dom loss:0.6834 | avg IM loss:-0.9711 | avg LMMD loss:0.0450 | DomAcc:0.5556 | cov:93.73% margin:0.983 | λ_GRL:0.4502 | λ_mmd_eff:0.0666
+[Epoch 25] Total loss:-0.2372 | Avg cls loss:0.0092 | avg Dom loss:0.6813 | avg IM loss:-0.9747 | avg LMMD loss:0.0470 | DomAcc:0.5656 | cov:94.20% margin:0.983 | λ_GRL:0.4559 | λ_mmd_eff:0.0749
+[Epoch 26] Total loss:-0.2317 | Avg cls loss:0.0069 | avg Dom loss:0.6830 | avg IM loss:-0.9794 | avg LMMD loss:0.0578 | DomAcc:0.5555 | cov:95.62% margin:0.988 | λ_GRL:0.4610 | λ_mmd_eff:0.0830
+[Epoch 27] Total loss:-0.2319 | Avg cls loss:0.0057 | avg Dom loss:0.6781 | avg IM loss:-0.9748 | avg LMMD loss:0.0592 | DomAcc:0.5787 | cov:94.88% margin:0.987 | λ_GRL:0.4656 | λ_mmd_eff:0.0893
+[Epoch 28] Total loss:-0.2201 | Avg cls loss:0.0054 | avg Dom loss:0.6840 | avg IM loss:-0.9786 | avg LMMD loss:0.0691 | DomAcc:0.5485 | cov:94.60% margin:0.986 | λ_GRL:0.4696 | λ_mmd_eff:0.0949
+[Epoch 29] Total loss:-0.2261 | Avg cls loss:0.0036 | avg Dom loss:0.6788 | avg IM loss:-0.9800 | avg LMMD loss:0.0715 | DomAcc:0.5788 | cov:97.42% margin:0.989 | λ_GRL:0.4731 | λ_mmd_eff:0.1011
+[Epoch 30] Total loss:-0.2197 | Avg cls loss:0.0082 | avg Dom loss:0.6871 | avg IM loss:-0.9864 | avg LMMD loss:0.0714 | DomAcc:0.5407 | cov:96.45% margin:0.989 | λ_GRL:0.4763 | λ_mmd_eff:0.1045
+[Epoch 31] Total loss:-0.2316 | Avg cls loss:0.0065 | avg Dom loss:0.6825 | avg IM loss:-0.9880 | avg LMMD loss:0.0672 | DomAcc:0.5631 | cov:97.20% margin:0.988 | λ_GRL:0.4791 | λ_mmd_eff:0.1080
+[Epoch 32] Total loss:-0.2234 | Avg cls loss:0.0021 | avg Dom loss:0.6872 | avg IM loss:-0.9805 | avg LMMD loss:0.0678 | DomAcc:0.5415 | cov:97.78% margin:0.988 | λ_GRL:0.4816 | λ_mmd_eff:0.1108
+[Epoch 33] Total loss:-0.2095 | Avg cls loss:0.0068 | avg Dom loss:0.6873 | avg IM loss:-0.9774 | avg LMMD loss:0.0737 | DomAcc:0.5442 | cov:97.92% margin:0.990 | λ_GRL:0.4837 | λ_mmd_eff:0.1128
+[Epoch 34] Total loss:-0.2192 | Avg cls loss:0.0042 | avg Dom loss:0.6810 | avg IM loss:-0.9746 | avg LMMD loss:0.0701 | DomAcc:0.5653 | cov:96.62% margin:0.988 | λ_GRL:0.4857 | λ_mmd_eff:0.1135
+[Epoch 35] Total loss:-0.2172 | Avg cls loss:0.0023 | avg Dom loss:0.6846 | avg IM loss:-0.9782 | avg LMMD loss:0.0741 | DomAcc:0.5547 | cov:97.80% margin:0.990 | λ_GRL:0.4874 | λ_mmd_eff:0.1153
+[Epoch 36] Total loss:-0.2165 | Avg cls loss:0.0012 | avg Dom loss:0.6911 | avg IM loss:-0.9837 | avg LMMD loss:0.0750 | DomAcc:0.5278 | cov:97.65% margin:0.990 | λ_GRL:0.4889 | λ_mmd_eff:0.1160
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9559
+[Epoch 37] Total loss:-0.2206 | Avg cls loss:0.0008 | avg Dom loss:0.6900 | avg IM loss:-0.9768 | avg LMMD loss:0.0654 | DomAcc:0.5240 | cov:98.50% margin:0.991 | λ_GRL:0.4902 | λ_mmd_eff:0.1172
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9528
+[Epoch 38] Total loss:-0.2064 | Avg cls loss:0.0022 | avg Dom loss:0.6964 | avg IM loss:-0.9883 | avg LMMD loss:0.0833 | DomAcc:0.4965 | cov:97.90% margin:0.991 | λ_GRL:0.4914 | λ_mmd_eff:0.1173
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9849
+[Epoch 39] Total loss:-0.2020 | Avg cls loss:0.0006 | avg Dom loss:0.6886 | avg IM loss:-0.9775 | avg LMMD loss:0.0865 | DomAcc:0.5522 | cov:98.02% margin:0.991 | λ_GRL:0.4924 | λ_mmd_eff:0.1177
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9253
+[Epoch 40] Total loss:-0.2242 | Avg cls loss:0.0037 | avg Dom loss:0.6913 | avg IM loss:-0.9906 | avg LMMD loss:0.0714 | DomAcc:0.5178 | cov:97.62% margin:0.990 | λ_GRL:0.4933 | λ_mmd_eff:0.1178
+[EARLY-STOP] patience 2/3 | gap_ok=True | score=-0.9727
+[INFO] Evaluating on target test set...
+- test Loss: 5.278134, test Acc: 0.5970
+
+========== RUN 3 ==========
+[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...
+[Epoch 1] Total loss:-0.1160 | Avg cls loss:0.4820 | avg Dom loss:0.1042 | avg IM loss:-0.7022 | avg LMMD loss:0.0000 | DomAcc:0.9556 | cov:0.00% margin:0.000 | λ_GRL:0.0000 | λ_mmd_eff:0.0000
+[Epoch 2] Total loss:-0.8571 | Avg cls loss:0.0498 | avg Dom loss:0.0043 | avg IM loss:-0.9112 | avg LMMD loss:0.0000 | DomAcc:0.9996 | cov:0.00% margin:0.000 | λ_GRL:0.0320 | λ_mmd_eff:0.0000
+[Epoch 3] Total loss:-0.8767 | Avg cls loss:0.0382 | avg Dom loss:0.0152 | avg IM loss:-0.9303 | avg LMMD loss:0.0000 | DomAcc:0.9970 | cov:0.00% margin:0.000 | λ_GRL:0.0638 | λ_mmd_eff:0.0000
+[Epoch 4] Total loss:-0.9004 | Avg cls loss:0.0344 | avg Dom loss:0.0058 | avg IM loss:-0.9406 | avg LMMD loss:0.0000 | DomAcc:0.9991 | cov:0.00% margin:0.000 | λ_GRL:0.0950 | λ_mmd_eff:0.0000
+[Epoch 5] Total loss:-0.6913 | Avg cls loss:0.0290 | avg Dom loss:0.2175 | avg IM loss:-0.9378 | avg LMMD loss:0.0000 | DomAcc:0.9196 | cov:0.00% margin:0.000 | λ_GRL:0.1255 | λ_mmd_eff:0.0000
+[Epoch 6] Total loss:-0.6694 | Avg cls loss:0.0403 | avg Dom loss:0.2364 | avg IM loss:-0.9468 | avg LMMD loss:0.0007 | DomAcc:0.9003 | cov:78.97% margin:0.966 | λ_GRL:0.1550 | λ_mmd_eff:0.0007
+[Epoch 7] Total loss:-0.7074 | Avg cls loss:0.0318 | avg Dom loss:0.2040 | avg IM loss:-0.9439 | avg LMMD loss:0.0007 | DomAcc:0.9152 | cov:77.88% margin:0.969 | λ_GRL:0.1834 | λ_mmd_eff:0.0009
+[Epoch 8] Total loss:-0.5999 | Avg cls loss:0.0274 | avg Dom loss:0.2967 | avg IM loss:-0.9250 | avg LMMD loss:0.0011 | DomAcc:0.8701 | cov:82.27% margin:0.972 | λ_GRL:0.2104 | λ_mmd_eff:0.0013
+[Epoch 9] Total loss:-0.5276 | Avg cls loss:0.0369 | avg Dom loss:0.3659 | avg IM loss:-0.9316 | avg LMMD loss:0.0011 | DomAcc:0.8341 | cov:86.72% margin:0.974 | λ_GRL:0.2361 | λ_mmd_eff:0.0018
+[Epoch 10] Total loss:-0.4135 | Avg cls loss:0.0390 | avg Dom loss:0.4794 | avg IM loss:-0.9334 | avg LMMD loss:0.0014 | DomAcc:0.7643 | cov:73.25% margin:0.967 | λ_GRL:0.2602 | λ_mmd_eff:0.0022
+[Epoch 11] Total loss:-0.3487 | Avg cls loss:0.0412 | avg Dom loss:0.5411 | avg IM loss:-0.9332 | avg LMMD loss:0.0021 | DomAcc:0.7093 | cov:81.05% margin:0.972 | λ_GRL:0.2828 | λ_mmd_eff:0.0031
+[Epoch 12] Total loss:-0.3686 | Avg cls loss:0.0326 | avg Dom loss:0.5401 | avg IM loss:-0.9432 | avg LMMD loss:0.0020 | DomAcc:0.7199 | cov:49.48% margin:0.966 | λ_GRL:0.3038 | λ_mmd_eff:0.0032
+[Epoch 13] Total loss:-0.3293 | Avg cls loss:0.0320 | avg Dom loss:0.5819 | avg IM loss:-0.9477 | avg LMMD loss:0.0044 | DomAcc:0.6818 | cov:85.82% margin:0.976 | λ_GRL:0.3232 | λ_mmd_eff:0.0056
+[Epoch 14] Total loss:-0.3031 | Avg cls loss:0.0404 | avg Dom loss:0.5977 | avg IM loss:-0.9459 | avg LMMD loss:0.0048 | DomAcc:0.6566 | cov:82.47% margin:0.975 | λ_GRL:0.3411 | λ_mmd_eff:0.0072
+[Epoch 15] Total loss:-0.3209 | Avg cls loss:0.0230 | avg Dom loss:0.5925 | avg IM loss:-0.9431 | avg LMMD loss:0.0067 | DomAcc:0.6671 | cov:83.33% margin:0.974 | λ_GRL:0.3575 | λ_mmd_eff:0.0095
+[Epoch 16] Total loss:-0.3002 | Avg cls loss:0.0224 | avg Dom loss:0.6242 | avg IM loss:-0.9552 | avg LMMD loss:0.0084 | DomAcc:0.6376 | cov:84.85% margin:0.976 | λ_GRL:0.3725 | λ_mmd_eff:0.0125
+[Epoch 17] Total loss:-0.2881 | Avg cls loss:0.0254 | avg Dom loss:0.6428 | avg IM loss:-0.9668 | avg LMMD loss:0.0105 | DomAcc:0.6196 | cov:86.75% margin:0.981 | λ_GRL:0.3861 | λ_mmd_eff:0.0163
+[Epoch 18] Total loss:-0.2894 | Avg cls loss:0.0195 | avg Dom loss:0.6446 | avg IM loss:-0.9666 | avg LMMD loss:0.0131 | DomAcc:0.6247 | cov:82.12% margin:0.970 | λ_GRL:0.3984 | λ_mmd_eff:0.0203
+[Epoch 19] Total loss:-0.2831 | Avg cls loss:0.0153 | avg Dom loss:0.6579 | avg IM loss:-0.9728 | avg LMMD loss:0.0165 | DomAcc:0.6095 | cov:87.62% margin:0.984 | λ_GRL:0.4095 | λ_mmd_eff:0.0265
+[Epoch 20] Total loss:-0.2565 | Avg cls loss:0.0256 | avg Dom loss:0.6602 | avg IM loss:-0.9628 | avg LMMD loss:0.0205 | DomAcc:0.6035 | cov:92.33% margin:0.982 | λ_GRL:0.4195 | λ_mmd_eff:0.0337
+[Epoch 21] Total loss:-0.2633 | Avg cls loss:0.0106 | avg Dom loss:0.6788 | avg IM loss:-0.9776 | avg LMMD loss:0.0249 | DomAcc:0.5723 | cov:88.40% margin:0.981 | λ_GRL:0.4285 | λ_mmd_eff:0.0403
+[Epoch 22] Total loss:-0.2473 | Avg cls loss:0.0160 | avg Dom loss:0.6745 | avg IM loss:-0.9738 | avg LMMD loss:0.0359 | DomAcc:0.5880 | cov:92.27% margin:0.982 | λ_GRL:0.4366 | λ_mmd_eff:0.0492
+[Epoch 23] Total loss:-0.2638 | Avg cls loss:0.0115 | avg Dom loss:0.6675 | avg IM loss:-0.9802 | avg LMMD loss:0.0373 | DomAcc:0.5956 | cov:92.27% margin:0.985 | λ_GRL:0.4438 | λ_mmd_eff:0.0576
+[Epoch 24] Total loss:-0.2394 | Avg cls loss:0.0127 | avg Dom loss:0.6775 | avg IM loss:-0.9769 | avg LMMD loss:0.0472 | DomAcc:0.5567 | cov:91.85% margin:0.982 | λ_GRL:0.4502 | λ_mmd_eff:0.0659
+[Epoch 25] Total loss:-0.2428 | Avg cls loss:0.0059 | avg Dom loss:0.6816 | avg IM loss:-0.9767 | avg LMMD loss:0.0464 | DomAcc:0.5642 | cov:94.25% margin:0.984 | λ_GRL:0.4559 | λ_mmd_eff:0.0749
+[Epoch 26] Total loss:-0.2367 | Avg cls loss:0.0057 | avg Dom loss:0.6866 | avg IM loss:-0.9776 | avg LMMD loss:0.0485 | DomAcc:0.5430 | cov:94.55% margin:0.988 | λ_GRL:0.4610 | λ_mmd_eff:0.0825
+[Epoch 27] Total loss:-0.2347 | Avg cls loss:0.0103 | avg Dom loss:0.6855 | avg IM loss:-0.9825 | avg LMMD loss:0.0518 | DomAcc:0.5564 | cov:94.70% margin:0.988 | λ_GRL:0.4656 | λ_mmd_eff:0.0893
+[Epoch 28] Total loss:-0.2276 | Avg cls loss:0.0045 | avg Dom loss:0.6819 | avg IM loss:-0.9760 | avg LMMD loss:0.0620 | DomAcc:0.5697 | cov:94.67% margin:0.986 | λ_GRL:0.4696 | λ_mmd_eff:0.0949
+[Epoch 29] Total loss:-0.2207 | Avg cls loss:0.0041 | avg Dom loss:0.6909 | avg IM loss:-0.9810 | avg LMMD loss:0.0652 | DomAcc:0.5271 | cov:96.33% margin:0.989 | λ_GRL:0.4731 | λ_mmd_eff:0.1006
+[Epoch 30] Total loss:-0.1994 | Avg cls loss:0.0130 | avg Dom loss:0.6844 | avg IM loss:-0.9755 | avg LMMD loss:0.0787 | DomAcc:0.5620 | cov:96.83% margin:0.989 | λ_GRL:0.4763 | λ_mmd_eff:0.1047
+[Epoch 31] Total loss:-0.2089 | Avg cls loss:0.0009 | avg Dom loss:0.6923 | avg IM loss:-0.9703 | avg LMMD loss:0.0681 | DomAcc:0.5198 | cov:95.12% margin:0.988 | λ_GRL:0.4791 | λ_mmd_eff:0.1069
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9505
+[Epoch 32] Total loss:-0.2121 | Avg cls loss:0.0027 | avg Dom loss:0.6920 | avg IM loss:-0.9813 | avg LMMD loss:0.0745 | DomAcc:0.5194 | cov:96.58% margin:0.989 | λ_GRL:0.4816 | λ_mmd_eff:0.1101
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9618
+[Epoch 33] Total loss:-0.2037 | Avg cls loss:0.0053 | avg Dom loss:0.6886 | avg IM loss:-0.9742 | avg LMMD loss:0.0766 | DomAcc:0.5407 | cov:95.33% margin:0.990 | λ_GRL:0.4837 | λ_mmd_eff:0.1113
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9335
+[Epoch 34] Total loss:-0.2109 | Avg cls loss:0.0002 | avg Dom loss:0.6913 | avg IM loss:-0.9762 | avg LMMD loss:0.0737 | DomAcc:0.5202 | cov:96.78% margin:0.990 | λ_GRL:0.4857 | λ_mmd_eff:0.1136
+[EARLY-STOP] patience 2/3 | gap_ok=True | score=-0.9560
+[Epoch 35] Total loss:-0.2139 | Avg cls loss:0.0022 | avg Dom loss:0.6894 | avg IM loss:-0.9753 | avg LMMD loss:0.0698 | DomAcc:0.5508 | cov:96.47% margin:0.991 | λ_GRL:0.4874 | λ_mmd_eff:0.1145
+[EARLY-STOP] patience 3/3 | gap_ok=True | score=-0.9245
+[EARLY-STOP] Stopping: stable alignment and no score improvement.
+[INFO] Evaluating on target test set...
+- test Loss: 4.911089, test Acc: 0.6218
+
+========== RUN 4 ==========
+[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...
+[Epoch 1] Total loss:-0.1947 | Avg cls loss:0.4558 | avg Dom loss:0.0578 | avg IM loss:-0.7082 | avg LMMD loss:0.0000 | DomAcc:0.9771 | cov:0.00% margin:0.000 | λ_GRL:0.0000 | λ_mmd_eff:0.0000
+[Epoch 2] Total loss:-0.8436 | Avg cls loss:0.0439 | avg Dom loss:0.0008 | avg IM loss:-0.8883 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.0320 | λ_mmd_eff:0.0000
+[Epoch 3] Total loss:-0.8717 | Avg cls loss:0.0461 | avg Dom loss:0.0048 | avg IM loss:-0.9227 | avg LMMD loss:0.0000 | DomAcc:0.9995 | cov:0.00% margin:0.000 | λ_GRL:0.0638 | λ_mmd_eff:0.0000
+[Epoch 4] Total loss:-0.8937 | Avg cls loss:0.0355 | avg Dom loss:0.0005 | avg IM loss:-0.9297 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.0950 | λ_mmd_eff:0.0000
+[Epoch 5] Total loss:-0.9129 | Avg cls loss:0.0239 | avg Dom loss:0.0002 | avg IM loss:-0.9370 | avg LMMD loss:0.0000 | DomAcc:1.0000 | cov:0.00% margin:0.000 | λ_GRL:0.1255 | λ_mmd_eff:0.0000
+[Epoch 6] Total loss:-0.9294 | Avg cls loss:0.0103 | avg Dom loss:0.0046 | avg IM loss:-0.9452 | avg LMMD loss:0.0009 | DomAcc:0.9998 | cov:91.53% margin:0.978 | λ_GRL:0.1550 | λ_mmd_eff:0.0008
+[Epoch 7] Total loss:-0.6784 | Avg cls loss:0.0250 | avg Dom loss:0.2445 | avg IM loss:-0.9485 | avg LMMD loss:0.0007 | DomAcc:0.9065 | cov:71.47% margin:0.970 | λ_GRL:0.1834 | λ_mmd_eff:0.0009
+[Epoch 8] Total loss:-0.5893 | Avg cls loss:0.0431 | avg Dom loss:0.3000 | avg IM loss:-0.9333 | avg LMMD loss:0.0008 | DomAcc:0.8728 | cov:77.80% margin:0.971 | λ_GRL:0.2104 | λ_mmd_eff:0.0013
+[Epoch 9] Total loss:-0.6246 | Avg cls loss:0.0391 | avg Dom loss:0.2722 | avg IM loss:-0.9373 | avg LMMD loss:0.0012 | DomAcc:0.8871 | cov:79.33% margin:0.975 | λ_GRL:0.2361 | λ_mmd_eff:0.0017
+[Epoch 10] Total loss:-0.4623 | Avg cls loss:0.0367 | avg Dom loss:0.4242 | avg IM loss:-0.9250 | avg LMMD loss:0.0017 | DomAcc:0.7975 | cov:89.65% margin:0.974 | λ_GRL:0.2602 | λ_mmd_eff:0.0024
+[Epoch 11] Total loss:-0.3868 | Avg cls loss:0.0327 | avg Dom loss:0.5175 | avg IM loss:-0.9389 | avg LMMD loss:0.0019 | DomAcc:0.7356 | cov:76.22% margin:0.967 | λ_GRL:0.2828 | λ_mmd_eff:0.0030
+[Epoch 12] Total loss:-0.3702 | Avg cls loss:0.0360 | avg Dom loss:0.5302 | avg IM loss:-0.9393 | avg LMMD loss:0.0029 | DomAcc:0.7188 | cov:86.55% margin:0.973 | λ_GRL:0.3038 | λ_mmd_eff:0.0042
+[Epoch 13] Total loss:-0.3222 | Avg cls loss:0.0381 | avg Dom loss:0.5699 | avg IM loss:-0.9340 | avg LMMD loss:0.0038 | DomAcc:0.6795 | cov:87.80% margin:0.976 | λ_GRL:0.3232 | λ_mmd_eff:0.0056
+[Epoch 14] Total loss:-0.3236 | Avg cls loss:0.0252 | avg Dom loss:0.5900 | avg IM loss:-0.9440 | avg LMMD loss:0.0051 | DomAcc:0.6733 | cov:87.28% margin:0.971 | λ_GRL:0.3411 | λ_mmd_eff:0.0074
+[Epoch 15] Total loss:-0.2745 | Avg cls loss:0.0218 | avg Dom loss:0.6372 | avg IM loss:-0.9402 | avg LMMD loss:0.0066 | DomAcc:0.6435 | cov:82.55% margin:0.975 | λ_GRL:0.3575 | λ_mmd_eff:0.0095
+[Epoch 16] Total loss:-0.2840 | Avg cls loss:0.0208 | avg Dom loss:0.6400 | avg IM loss:-0.9517 | avg LMMD loss:0.0069 | DomAcc:0.6207 | cov:67.05% margin:0.971 | λ_GRL:0.3725 | λ_mmd_eff:0.0111
+[Epoch 17] Total loss:-0.2663 | Avg cls loss:0.0201 | avg Dom loss:0.6478 | avg IM loss:-0.9433 | avg LMMD loss:0.0092 | DomAcc:0.6247 | cov:90.95% margin:0.981 | λ_GRL:0.3861 | λ_mmd_eff:0.0167
+[Epoch 18] Total loss:-0.2718 | Avg cls loss:0.0228 | avg Dom loss:0.6347 | avg IM loss:-0.9429 | avg LMMD loss:0.0137 | DomAcc:0.6420 | cov:91.50% margin:0.981 | λ_GRL:0.3984 | λ_mmd_eff:0.0214
+[Epoch 19] Total loss:-0.2641 | Avg cls loss:0.0175 | avg Dom loss:0.6484 | avg IM loss:-0.9462 | avg LMMD loss:0.0162 | DomAcc:0.6266 | cov:92.55% margin:0.985 | λ_GRL:0.4095 | λ_mmd_eff:0.0272
+[Epoch 20] Total loss:-0.2380 | Avg cls loss:0.0219 | avg Dom loss:0.6719 | avg IM loss:-0.9541 | avg LMMD loss:0.0223 | DomAcc:0.5770 | cov:92.90% margin:0.983 | λ_GRL:0.4195 | λ_mmd_eff:0.0339
+[Epoch 21] Total loss:-0.2351 | Avg cls loss:0.0178 | avg Dom loss:0.6668 | avg IM loss:-0.9483 | avg LMMD loss:0.0286 | DomAcc:0.5983 | cov:91.97% margin:0.982 | λ_GRL:0.4285 | λ_mmd_eff:0.0411
+[Epoch 22] Total loss:-0.2453 | Avg cls loss:0.0081 | avg Dom loss:0.6661 | avg IM loss:-0.9508 | avg LMMD loss:0.0312 | DomAcc:0.5987 | cov:91.60% margin:0.978 | λ_GRL:0.4366 | λ_mmd_eff:0.0490
+[Epoch 23] Total loss:-0.2268 | Avg cls loss:0.0074 | avg Dom loss:0.6712 | avg IM loss:-0.9432 | avg LMMD loss:0.0379 | DomAcc:0.5897 | cov:95.62% margin:0.988 | λ_GRL:0.4438 | λ_mmd_eff:0.0587
+[Epoch 24] Total loss:-0.2274 | Avg cls loss:0.0046 | avg Dom loss:0.6758 | avg IM loss:-0.9487 | avg LMMD loss:0.0408 | DomAcc:0.5805 | cov:94.10% margin:0.987 | λ_GRL:0.4502 | λ_mmd_eff:0.0667
+[Epoch 25] Total loss:-0.2360 | Avg cls loss:0.0037 | avg Dom loss:0.6700 | avg IM loss:-0.9500 | avg LMMD loss:0.0403 | DomAcc:0.6019 | cov:94.67% margin:0.988 | λ_GRL:0.4559 | λ_mmd_eff:0.0751
+[Epoch 26] Total loss:-0.2154 | Avg cls loss:0.0072 | avg Dom loss:0.6822 | avg IM loss:-0.9529 | avg LMMD loss:0.0481 | DomAcc:0.5606 | cov:95.95% margin:0.989 | λ_GRL:0.4610 | λ_mmd_eff:0.0831
+[Epoch 27] Total loss:-0.2125 | Avg cls loss:0.0106 | avg Dom loss:0.6758 | avg IM loss:-0.9543 | avg LMMD loss:0.0555 | DomAcc:0.5783 | cov:91.40% margin:0.984 | λ_GRL:0.4656 | λ_mmd_eff:0.0877
+[Epoch 28] Total loss:-0.2210 | Avg cls loss:0.0073 | avg Dom loss:0.6784 | avg IM loss:-0.9658 | avg LMMD loss:0.0591 | DomAcc:0.5883 | cov:91.40% margin:0.985 | λ_GRL:0.4696 | λ_mmd_eff:0.0933
+[Epoch 29] Total loss:-0.2257 | Avg cls loss:0.0056 | avg Dom loss:0.6821 | avg IM loss:-0.9776 | avg LMMD loss:0.0642 | DomAcc:0.5642 | cov:92.17% margin:0.988 | λ_GRL:0.4731 | λ_mmd_eff:0.0984
+[Epoch 30] Total loss:-0.2278 | Avg cls loss:0.0088 | avg Dom loss:0.6716 | avg IM loss:-0.9757 | avg LMMD loss:0.0676 | DomAcc:0.6055 | cov:93.25% margin:0.987 | λ_GRL:0.4763 | λ_mmd_eff:0.1028
+[Epoch 31] Total loss:-0.2132 | Avg cls loss:0.0068 | avg Dom loss:0.6803 | avg IM loss:-0.9751 | avg LMMD loss:0.0749 | DomAcc:0.5617 | cov:95.47% margin:0.988 | λ_GRL:0.4791 | λ_mmd_eff:0.1071
+[Epoch 32] Total loss:-0.2414 | Avg cls loss:0.0014 | avg Dom loss:0.6706 | avg IM loss:-0.9764 | avg LMMD loss:0.0630 | DomAcc:0.5988 | cov:94.88% margin:0.988 | λ_GRL:0.4816 | λ_mmd_eff:0.1092
+[Epoch 33] Total loss:-0.2279 | Avg cls loss:0.0020 | avg Dom loss:0.6782 | avg IM loss:-0.9818 | avg LMMD loss:0.0736 | DomAcc:0.5661 | cov:96.40% margin:0.991 | λ_GRL:0.4837 | λ_mmd_eff:0.1119
+[Epoch 34] Total loss:-0.2144 | Avg cls loss:0.0020 | avg Dom loss:0.6903 | avg IM loss:-0.9788 | avg LMMD loss:0.0721 | DomAcc:0.5321 | cov:95.58% margin:0.991 | λ_GRL:0.4857 | λ_mmd_eff:0.1129
+[Epoch 35] Total loss:-0.2089 | Avg cls loss:0.0004 | avg Dom loss:0.6910 | avg IM loss:-0.9777 | avg LMMD loss:0.0775 | DomAcc:0.5232 | cov:95.93% margin:0.991 | λ_GRL:0.4874 | λ_mmd_eff:0.1142
+[Epoch 36] Total loss:-0.2009 | Avg cls loss:0.0004 | avg Dom loss:0.6996 | avg IM loss:-0.9748 | avg LMMD loss:0.0739 | DomAcc:0.4801 | cov:96.90% margin:0.992 | λ_GRL:0.4889 | λ_mmd_eff:0.1156
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9549
+[Epoch 37] Total loss:-0.2142 | Avg cls loss:0.0019 | avg Dom loss:0.6918 | avg IM loss:-0.9867 | avg LMMD loss:0.0789 | DomAcc:0.5223 | cov:97.45% margin:0.992 | λ_GRL:0.4902 | λ_mmd_eff:0.1166
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9644
+[Epoch 38] Total loss:-0.2173 | Avg cls loss:0.0003 | avg Dom loss:0.6917 | avg IM loss:-0.9831 | avg LMMD loss:0.0738 | DomAcc:0.5259 | cov:96.73% margin:0.991 | λ_GRL:0.4914 | λ_mmd_eff:0.1166
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9572
+[Epoch 39] Total loss:-0.2183 | Avg cls loss:0.0003 | avg Dom loss:0.6948 | avg IM loss:-0.9850 | avg LMMD loss:0.0718 | DomAcc:0.5017 | cov:97.70% margin:0.992 | λ_GRL:0.4924 | λ_mmd_eff:0.1175
+[EARLY-STOP] patience 0/3 | gap_ok=True | score=-0.9834
+[Epoch 40] Total loss:-0.2059 | Avg cls loss:0.0008 | avg Dom loss:0.6970 | avg IM loss:-0.9811 | avg LMMD loss:0.0775 | DomAcc:0.4899 | cov:98.02% margin:0.992 | λ_GRL:0.4933 | λ_mmd_eff:0.1180
+[EARLY-STOP] patience 1/3 | gap_ok=True | score=-0.9710
+[INFO] Evaluating on target test set...
+- test Loss: 5.047439, test Acc: 0.6257
+
+Process finished with exit code 0

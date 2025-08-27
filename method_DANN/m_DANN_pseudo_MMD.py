@@ -62,8 +62,8 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
                           score_weights=(0.8, 0.1),
                           gammas=1.5,
                           scheduler=None,
-                          batch_size=16):
-    warmup_best_start = 10
+                          batch_size=16,
+                          start_epoch=5):
     global_step = 0
     best_score = -float("inf")
     best_model_state = None
@@ -80,7 +80,7 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
         pl_loader = None
         pseudo_x = torch.empty(0)
         pseudo_y = torch.empty(0, dtype=torch.long)
-        if epoch > 3:
+        if epoch > start_epoch:
             pseudo_x, pseudo_y, pseudo_w = generate_pseudo_labels(model, target_loader, device, threshold=pseudo_thresh)  #
             if pseudo_x.numel() > 0:
                 pl_dataset = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
@@ -138,10 +138,10 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
                 tgt_pl_w = tgt_pl_w.to(device)
 
             # 前向
-            # lambda_dann_now = dann_lambda(epoch, num_epochs)
-            lambda_dann_now = 0.5
-            cls_out_src, dom_out_src, feat_src = model(src_x,lambda_=lambda_dann_now)
-            _,           dom_out_tgt, feat_tgt = model(tgt_x,lambda_=lambda_dann_now)
+
+            model.lambda_ =dann_lambda(epoch,num_epochs)
+            cls_out_src, dom_out_src, feat_src = model(src_x,grl=True)
+            _,           dom_out_tgt, feat_tgt = model(tgt_x,grl=True)
 
             # 1) 分类损失（源域）
             loss_cls = criterion_cls(cls_out_src, src_y)
@@ -160,7 +160,7 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
             if tgt_pl_x is not None:
                 # 为了 LMMD，需要目标端的“伪标签”对应的特征，单独前向取特征
 
-                cls_out_pl, _, feat_tgt_pl = model(tgt_pl_x,lambda_=0)
+                cls_out_pl, _, feat_tgt_pl = model(tgt_pl_x,grl=False)
                 feat_tgt_pl_n = F.normalize(feat_tgt_pl, dim=1)
 
                 loss_lmmd = classwise_mmd_biased(
@@ -176,8 +176,8 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
                 loss_lmmd = feat_src_n.new_tensor(0.0)
 
             # 4) 组合损失（DANN 调度 + LMMD warm-up）
-            # lambda_mmd_now  = float(mmd_lambda(epoch, num_epochs, max_lambda=lambda_mmd_max))
-            lambda_mmd_now = 0.05
+            lambda_mmd_now  = float(mmd_lambda(epoch, num_epochs, max_lambda=lambda_mmd_max,start_epoch=start_epoch))
+
             loss = loss_cls +  loss_dom + lambda_mmd_now * loss_lmmd
 
             optimizer.zero_grad()
@@ -219,7 +219,7 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
               f"Cls loss: {avg_cls_loss:.4f} | Dom loss: {avg_dom_loss:.4f} | "
               f"LMMD loss: {avg_lmmd_loss:.4f} | DomAcc: {dom_acc:.4f} | "
               f"KeepPL: {pseudo_kept}/{tgt_total_epoch} ({kept_ratio:.2%}) | "
-              f"λ_dann: {lambda_dann_now:.4f} | λ_mmd: {lambda_mmd_now:.4f}"
+              f"λ_dann: {model.lambda_:.4f} | λ_mmd: {lambda_mmd_now:.4f}"
               )
 
         mmd_hist.append(avg_lmmd_loss)
@@ -230,7 +230,7 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
         w_gap, w_mmd = score_weights
         curr_score = score_metric(curr, w_gap=w_gap, w_mmd=w_mmd)
         improved = False
-        if epoch >= warmup_best_start and (curr_score > best_score + 1e-6):
+        if epoch >= 10 and (curr_score > best_score + 1e-6):
             best_score = curr_score
             best_model_state = copy.deepcopy(model.state_dict())
             improved = True
@@ -262,11 +262,11 @@ def train_dann_with_clmmd(model, source_loader, target_loader,
                 break
         else:
             patience = 0
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T188_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(model, criterion_cls, test_loader, device)
+        # print("[INFO] Evaluating on target test set...")
+        # target_test_path = '../datasets/target/test/HC_T188_RP.txt'
+        # test_dataset = PKLDataset(target_test_path)
+        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        # general_test_model(model, criterion_cls, test_loader, device)
 
     # 结束时回载
     if best_model_state is not None:
@@ -284,10 +284,11 @@ if __name__ == '__main__':
     kernel_size = config['kernel_size']
     start_channels = config['start_channels']
     num_epochs = config['num_epochs']
+    num_epochs=20
 
     source_path = '../datasets/source/train/DC_T197_RP.txt'
-    target_path = '../datasets/target/train/HC_T188_RP.txt'
-    target_test_path = '../datasets/target/test/HC_T188_RP.txt'
+    target_path = '../datasets/target/train/HC_T197_RP.txt'
+    target_test_path = '../datasets/target/test/HC_T197_RP.txt'
     out_path = 'model'
     os.makedirs(out_path, exist_ok=True)
 
@@ -299,7 +300,7 @@ if __name__ == '__main__':
                           kernel_size=kernel_size,
                           cnn_act='leakrelu',
                           num_classes=NUM_CLASSES,
-                          lambda_=0.5).to(device)
+                          lambda_=1).to(device)
 
     source_loader, target_loader = get_dataloaders(source_path, target_path, batch_size)
 
@@ -330,8 +331,8 @@ if __name__ == '__main__':
         lambda_mmd_max=1e-1,
         gammas=1.5,
         scheduler=scheduler,
-        batch_size=batch_size
-
+        batch_size=batch_size,
+        start_epoch=5
     )
 
     print("[INFO] Evaluating on target test set...")

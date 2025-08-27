@@ -17,7 +17,7 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
 with open("../configs/default.yaml", 'r') as f:
-    config = yaml.safe_load(f)['baseline']
+    config = yaml.safe_load(f)['baseline_2']
 # Extract parameters
 batch_size = config['batch_size']
 learning_rate = config['learning_rate']
@@ -106,7 +106,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
                 break
 
     if best_model_state is not None:
-        torch.save(best_model_state, os.path.join(out_path, 'test_best_model.pth'))
+        torch.save(best_model_state, os.path.join(out_path, 'neu2_best_model.pth'))
         model.load_state_dict(best_model_state)
 
     return best_val_loss
