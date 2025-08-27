@@ -150,18 +150,18 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
         total += x.size(0)
         x_dev = x.to(device)
-        logits, _ = model(x_dev)
-        prob = F.softmax(logits/T, dim=1)
-        top2 = torch.topk(prob, k=2, dim=1).values #Top-1 probability and Top-2 probability of each sample [B,2]
-        conf, _ = torch.max(prob, dim=1)  #Top-1 probability of each sample [B,1]
-        margin = top2[:,0] - top2[:,1] #The difference between the top-1 probability and the top-2 probability of each sample
+        logits, _ , _= model(x_dev)
+        prob = F.softmax(logits / T, dim=1)
+        top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
+        conf, _ = torch.max(prob, dim=1)            # [B]
+        margin = top2[:, 0] - top2[:, 1]            # [B]
         keep = conf >= threshold
         if keep.any():
-            xs.append(x[keep].cpu())
-            ys.append(prob[keep].argmax(dim=1).cpu().long())
-            # Use margin as sample weight (quality)
-            ws.append(margin[keep].cpu())
-            margins.append(margin[keep].cpu())
+            # ---- 修改处：用 GPU 上的掩码索引 GPU 张量，再搬回 CPU ----
+            xs.append(x_dev[keep].detach().cpu())
+            ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
+            ws.append(margin[keep].detach().cpu())
+            margins.append(margin[keep].detach().cpu())
     if len(xs) == 0:
         x_cat = torch.empty(0); y_cat = torch.empty(0, dtype=torch.long); w_cat = torch.empty(0)
         cov = 0.0; margin_mean = 0.0
@@ -173,6 +173,7 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
         margin_mean = float(torch.cat(margins).mean())
     return x_cat, y_cat, w_cat, {"kept": int(x_cat.size(0)), "total": int(total),
                                  "coverage": cov, "margin_mean": margin_mean}
+
 
 #  Weighted Class Conditional MMD (Multi-core RBF)
 def _pairwise_sq_dists(a, b):
@@ -250,36 +251,37 @@ def pretrain_source_classifier(src_model, source_loader, optimizer, criterion_cl
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if scheduler is not None: scheduler.step()
             tot_loss += loss.item() * xb.size(0); tot_n += xb.size(0)
         print(f"[SRC PRETRAIN] Epoch {epoch+1}/{num_epochs} | cls:{tot_loss/max(1,tot_n):.4f}")
+        if scheduler is not None:
+            scheduler.step()
     return src_model
 
 # ===== 新增：阶段2 —— ADDA 对抗 + (可选) InfoMax + (可选) LMMD =====
 def train_adda_infomax_lmmd(
     src_model, tgt_model, source_loader, target_loader,
-    device, num_epochs=20, num_classes=10,
+    device, num_epochs=20, num_classes=10,batch_size=16,
     # 判别器/优化器
     lr_ft=1e-4, lr_d=1e-4, weight_decay=0.0,
     # InfoMax
     im_T=1.0, im_weight=0.5, im_marg_w=1.0,
     # Pseudo+LMMD
-    lmmd_start_epoch=5, pseudo_thresh=0.95, mmd_gammas=(0.5,1,2,4,8), batch_size=16
+    lmmd_start_epoch=5, pseudo_thresh=0.95, mmd_gammas=(0.5,1,2,4,8), T_lmmd = 2
 ):
     # 1) 冻结源模型 (完全固定 F_s + C)
     src_model.eval(); freeze(src_model)
 
-    # 2) 冻结目标模型的 classifier，只训练其 encoder（整体复制已完成）
+    # 2) 冻结目标模型的 classifier，只训练其 encoder
+    for p in tgt_model.classifier.parameters():
+        p.requires_grad = False
+    enc_params = [p for n, p in tgt_model.named_parameters() if not n.startswith('classifier')]
+    opt_ft = torch.optim.Adam(enc_params, lr=lr_ft, weight_decay=weight_decay)
     tgt_model.train()
-
-    # 如果模型没有显式属性名，这里采用“只用特征做 D/F_t 训练”的策略即可。
-    # 为稳妥起见，我们在优化器里只放“encoder相关参数”。若无法精准筛选，则先全部放进来也可以，
-    # 但记得在下面把分类器参数的 grad 置零（保底）。
-    opt_ft = torch.optim.Adam(tgt_model.parameters(), lr=lr_ft, weight_decay=weight_decay)
 
     # 3) 通过一个 batch 推断特征维度，按需构造 D
     with torch.no_grad():
         xb_s, yb_s = next(iter(source_loader))
+        xb_s = xb_s.to(device)
         _ , feat_s, _= src_model(xb_s)
         feat_dim = feat_s.size(1)
     D = DomainClassifier(feature_dim=feat_dim).to(device)
@@ -294,7 +296,7 @@ def train_adda_infomax_lmmd(
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                tgt_model, target_loader, device, threshold=pseudo_thresh, T=1.0
+                tgt_model, target_loader, device, threshold=pseudo_thresh, T=T_lmmd
             )
             cov, margin_mean = stats["coverage"], stats["margin_mean"]
             if pseudo_x.numel() > 0:
@@ -340,7 +342,11 @@ def train_adda_infomax_lmmd(
                 d_acc_sum += d_acc; d_cnt += 1
 
             # ---------- (B) 训练 F_t: min 交叉熵(D(F_t(xt)), “source”标签) ----------
-            logits_t, f_t, _  = tgt_model(xt)
+            D.eval()
+            for p in D.parameters():
+                p.requires_grad = False
+            _, f_t, _  = tgt_model(xt)
+            logits_t = src_model.classifier(f_t)
             fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # 让 D 预测成“source” -1
             g_out = D(f_t)
             loss_g = c_dom(g_out, fool_lab)
@@ -371,11 +377,10 @@ def train_adda_infomax_lmmd(
 
             opt_ft.zero_grad()
             loss_ft.backward()
-            # 保险起见：阻止 classifier 的梯度（若优化器里包含了分类器参数）
-            for n,p in tgt_model.named_parameters():
-                if ('classifier' in n or 'fc' in n) and p.grad is not None:
-                    p.grad = None
             opt_ft.step()
+            for p in D.parameters():
+                p.requires_grad = True
+            D.train()
 
             # 统计
             d_loss_sum += loss_d.item()
@@ -398,7 +403,7 @@ def train_adda_infomax_lmmd(
 
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
-        cfg = yaml.safe_load(f)['baseline']
+        cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
@@ -417,7 +422,7 @@ if __name__ == "__main__":
 
         src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
         optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
-        scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=max(1, num_epochs // 2), eta_min=lr * 0.1)
+        scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs, eta_min=lr * 0.1)
         src_cls = nn.CrossEntropyLoss()
 
         print("[INFO] SRC pretrain (Fs + C) ...")
@@ -432,13 +437,13 @@ if __name__ == "__main__":
         print("[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...")
         tgt_model = train_adda_infomax_lmmd(
             src_model, tgt_model, src_loader, tgt_loader, device,
-            num_epochs=num_epochs, num_classes=10,
+            num_epochs=num_epochs, num_classes=10,batch_size=bs,
             # 判别器/优化器
             lr_ft=lr, lr_d=lr, weight_decay=wd,
             # InfoMax
             im_T=1.0, im_weight=0.5, im_marg_w=1.0,
             # LMMD
-            lmmd_start_epoch=5, pseudo_thresh=0.95, mmd_gammas=(0.5,1,2,4,8), batch_size=bs
+            lmmd_start_epoch=5, pseudo_thresh=0.95, T_lmmd=2
         )
 
         # —— 评测：直接用 tgt_model（其 classifier 已冻结且最初拷自源模型）

@@ -444,8 +444,8 @@ if __name__ == "__main__":
     num_epochs = cfg['num_epochs']
 
     src_path = '../datasets/source/train/DC_T197_RP.txt'
-    tgt_path = '../datasets/target/train/HC_T188_RP.txt'
-    tgt_test = '../datasets/target/test/HC_T188_RP.txt'
+    tgt_path = '../datasets/target/train/HC_T185_RP.txt'
+    tgt_test = '../datasets/target/test/HC_T185_RP.txt'
 
     for run_id in range(5):
         print(f"\n========== RUN {run_id} ==========")
