@@ -21,6 +21,15 @@ def get_dataloaders(source_path, target_path, batch_size):
     src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
     return src_loader, tgt_loader
 
+def schedule_steps_by_epoch(epoch, num_epochs):
+    p = (epoch + 1) / max(1, num_epochs)  # 0→1
+    if p < 0.3:          # 早期：D 多 Ft 少
+        d_steps, ft_steps = 2, 1
+    elif p < 0.6:        # 中期：平衡
+        d_steps, ft_steps = 1, 1
+    else:                # 后期：Ft 多 D 少
+        d_steps, ft_steps = 1, 2
+    return d_steps, ft_steps
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
@@ -258,7 +267,7 @@ def train_adda_infomax_lmmd(
     src_model, tgt_model, source_loader, target_loader,
     device, num_epochs=20, num_classes=10,batch_size=16,
     # 判别器/优化器
-    lr_ft=1e-4, lr_d=1e-4, weight_decay=0.0,d_steps=1, ft_steps=3,
+    lr_ft=1e-4, lr_d=1e-4, weight_decay=0.0,
     # InfoMax
     im_T=1.0, im_weight=0.5, im_marg_w=1.0,
     # Pseudo+LMMD
@@ -312,13 +321,14 @@ def train_adda_infomax_lmmd(
         len_pl  = len(pl_loader) if pl_loader is not None else 0
         steps = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
 
+        d_steps, ft_steps = schedule_steps_by_epoch(epoch, num_epochs)
+
         tgt_model.train()
         tgt_model.classifier.eval()
         D.train()
 
         # 统计
         d_loss_sum = g_loss_sum = im_loss_sum = mmd_loss_sum = ft_loss_sum = 0.0
-        loss_g_sum = loss_ft_sum = g_d_loss_sum = loss_im_sum = loss_lmmd_sum = 0.0
         d_acc_sum = 0.0; d_cnt = 0
 
         for _ in range(steps):
@@ -460,7 +470,7 @@ if __name__ == "__main__":
             src_model, tgt_model, src_loader, tgt_loader, device,
             num_epochs=num_epochs, num_classes=10,batch_size=bs,
             # 判别器/优化器
-            lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,d_steps=1, ft_steps=2,
+            lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,
             # InfoMax
             im_T=1.0, im_weight=0.8, im_marg_w=1.0,
             # LMMD
