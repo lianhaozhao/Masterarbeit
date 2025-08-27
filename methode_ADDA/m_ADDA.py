@@ -21,10 +21,6 @@ def get_dataloaders(source_path, target_path, batch_size):
     src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
     return src_loader, tgt_loader
 
-# DANN Lambda Scheduling (GRL only)
-def dann_lambda(epoch, num_epochs, max_lambda=0.5):
-    p = epoch / max(1, num_epochs-1)
-    return (2.0 / (1.0 + np.exp(-5 * p)) - 1.0) * max_lambda
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
@@ -287,7 +283,6 @@ def train_adda_infomax_lmmd(
     D = DomainClassifier(feature_dim=feat_dim).to(device)
     opt_d = torch.optim.Adam(D.parameters(), lr=lr_d, weight_decay=weight_decay)
     c_dom = nn.CrossEntropyLoss().to(device)
-
     # 4) 训练循环（交替优化 D 和 F_t）
     for epoch in range(num_epochs):
         # 准备伪标签以便 LMMD（可选）
@@ -302,6 +297,13 @@ def train_adda_infomax_lmmd(
             if pseudo_x.numel() > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
+        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=2e-1, start_epoch=lmmd_start_epoch)
+        def _lin(x, lo, hi):
+            return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
+        q_margin = _lin(margin_mean, 0.05, 0.50)
+        q_cov = math.sqrt(max(0.0, cov))  # concave
+        q = q_margin * q_cov
+        lambda_mmd_eff = lambda_mmd_base * q
 
         it_src, it_tgt = iter(source_loader), iter(target_loader)
         it_pl = iter(pl_loader) if pl_loader is not None else None
@@ -345,8 +347,8 @@ def train_adda_infomax_lmmd(
             D.eval()
             for p in D.parameters():
                 p.requires_grad = False
-            _, f_t, _  = tgt_model(xt)
-            logits_t = src_model.classifier(f_t)
+            logits_t, f_t, _  = tgt_model(xt)
+            # logits_t = src_model.classifier(f_t)
             fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # 让 D 预测成“source” -1
             g_out = D(f_t)
             loss_g = c_dom(g_out, fool_lab)
@@ -370,6 +372,7 @@ def train_adda_infomax_lmmd(
                     f_s_n, ys, f_t_pl_n, ypl, wpl,
                     num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=2
                 )
+                loss_lmmd = lambda_mmd_eff * loss_lmmd
             else:
                 loss_lmmd = f_t.new_tensor(0.0)
 
@@ -381,7 +384,6 @@ def train_adda_infomax_lmmd(
             for p in D.parameters():
                 p.requires_grad = True
             D.train()
-
             # 统计
             d_loss_sum += loss_d.item()
             g_loss_sum += loss_g.item()
@@ -391,7 +393,8 @@ def train_adda_infomax_lmmd(
         print(f"[ADDA] Epoch {epoch+1}/{num_epochs} | "
               f"D:{d_loss_sum/max(1,steps):.4f} | Ft:{g_loss_sum/max(1,steps):.4f} | "
               f"IM:{im_loss_sum/max(1,steps):.4f} | LMMD:{mmd_loss_sum/max(1,steps):.4f} | "
-              f"D-acc:{(d_acc_sum/max(1,d_cnt)):.4f} | cov:{cov:.2%} margin:{margin_mean:.3f}")
+              f"D-acc:{(d_acc_sum/max(1,d_cnt)):.4f} | cov:{cov:.2%} margin:{margin_mean:.3f}"
+              f"loss_lmmd:{loss_lmmd}")
 
         print("[INFO] Evaluating on target test set...")
         target_test_path = '../datasets/target/test/HC_T191_RP.txt'
@@ -446,11 +449,10 @@ if __name__ == "__main__":
             lmmd_start_epoch=5, pseudo_thresh=0.95, T_lmmd=2
         )
 
-        # —— 评测：直接用 tgt_model（其 classifier 已冻结且最初拷自源模型）
+
         print("[INFO] Evaluating on target test set...")
         test_ds = PKLDataset(tgt_test)
         test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-        # 你的 general_test_model 若调用 model(x, grl=False) 则与 Flexible_DANN 接口兼容
         general_test_model(tgt_model, src_cls, test_loader, device)
 
         del src_model, tgt_model, optimizer_src, scheduler_src, src_loader, tgt_loader, test_loader, test_ds
