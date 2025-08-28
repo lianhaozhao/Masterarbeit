@@ -1,0 +1,655 @@
+[INFO] Loading HC_T185 ...
+
+========== RUN 0 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:1.0088
+[SRC PRETRAIN] Epoch 2/10 | cls:0.2265
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0766
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0515
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0320
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0234
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0193
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0073
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0026
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0023
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7461 | G(adver):0.7867 | IM:-1.4756 | LMMD:0.0000 | FT(total):-0.6888 | D-acc:0.4392 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7201 | G(adver):0.7005 | IM:-1.6517 | LMMD:0.0000 | FT(total):-0.9512 | D-acc:0.4290 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6597 | G(adver):0.7542 | IM:-1.6672 | LMMD:0.0000 | FT(total):-0.9130 | D-acc:0.6058 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.7116 | G(adver):0.7340 | IM:-1.6742 | LMMD:0.0000 | FT(total):-0.9403 | D-acc:0.4745 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6966 | G(adver):0.7178 | IM:-1.6719 | LMMD:0.0000 | FT(total):-0.9541 | D-acc:0.4826 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6854 | G(adver):0.7206 | IM:-1.6671 | LMMD:0.0010 | FT(total):-0.9455 | D-acc:0.5237 | cov:48.73% margin:0.953 | loss_lmmd:0.0008
+[ADDA] Ep 7/10 | D:0.6697 | G(adver):0.7568 | IM:-1.6437 | LMMD:0.0112 | FT(total):-0.8758 | D-acc:0.5826 | cov:55.38% margin:0.949 | loss_lmmd:0.0107
+[ADDA] Ep 8/10 | D:0.6738 | G(adver):0.7591 | IM:-1.6743 | LMMD:0.0621 | FT(total):-0.8532 | D-acc:0.5803 | cov:54.98% margin:0.956 | loss_lmmd:0.0393
+[ADDA] Ep 9/10 | D:0.7060 | G(adver):0.7198 | IM:-1.6898 | LMMD:0.1357 | FT(total):-0.8343 | D-acc:0.4759 | cov:75.52% margin:0.956 | loss_lmmd:0.1142
+[ADDA] Ep 10/10 | D:0.6755 | G(adver):0.7433 | IM:-1.6779 | LMMD:0.1068 | FT(total):-0.8278 | D-acc:0.5607 | cov:56.40% margin:0.961 | loss_lmmd:0.0990
+[INFO] Evaluating on target test set...
+- test Loss: 0.234838, test Acc: 0.9536
+
+========== RUN 1 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.6609
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0718
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0366
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0171
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0306
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0264
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0079
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0048
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0010
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0007
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7431 | G(adver):0.7521 | IM:-1.4546 | LMMD:0.0000 | FT(total):-0.7025 | D-acc:0.3837 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7260 | G(adver):0.6826 | IM:-1.5664 | LMMD:0.0000 | FT(total):-0.8838 | D-acc:0.3955 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6932 | G(adver):0.6988 | IM:-1.6625 | LMMD:0.0000 | FT(total):-0.9637 | D-acc:0.5153 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6954 | G(adver):0.6937 | IM:-1.6777 | LMMD:0.0000 | FT(total):-0.9840 | D-acc:0.4857 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6895 | G(adver):0.7022 | IM:-1.6822 | LMMD:0.0000 | FT(total):-0.9800 | D-acc:0.5185 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6850 | G(adver):0.7091 | IM:-1.6828 | LMMD:0.0012 | FT(total):-0.9725 | D-acc:0.5409 | cov:74.02% margin:0.959 | loss_lmmd:0.0012
+[ADDA] Ep 7/10 | D:0.6869 | G(adver):0.7173 | IM:-1.6988 | LMMD:0.0105 | FT(total):-0.9709 | D-acc:0.5154 | cov:63.84% margin:0.957 | loss_lmmd:0.0091
+[ADDA] Ep 8/10 | D:0.6755 | G(adver):0.7500 | IM:-1.6919 | LMMD:0.0470 | FT(total):-0.8949 | D-acc:0.5603 | cov:38.07% margin:0.949 | loss_lmmd:0.0458
+[ADDA] Ep 9/10 | D:0.6775 | G(adver):0.7724 | IM:-1.6882 | LMMD:0.1256 | FT(total):-0.7901 | D-acc:0.5583 | cov:78.11% margin:0.959 | loss_lmmd:0.1378
+[ADDA] Ep 10/10 | D:0.7073 | G(adver):0.7142 | IM:-1.6861 | LMMD:0.0562 | FT(total):-0.9157 | D-acc:0.4581 | cov:22.63% margin:0.952 | loss_lmmd:0.0555
+[INFO] Evaluating on target test set...
+- test Loss: 1.755442, test Acc: 0.7702
+
+========== RUN 2 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.9178
+[SRC PRETRAIN] Epoch 2/10 | cls:0.1129
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0483
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0346
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0138
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0065
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0026
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0015
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0010
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0008
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7442 | G(adver):0.7345 | IM:-1.3852 | LMMD:0.0000 | FT(total):-0.6507 | D-acc:0.4331 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6969 | G(adver):0.7113 | IM:-1.6133 | LMMD:0.0000 | FT(total):-0.9020 | D-acc:0.4887 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6505 | G(adver):0.7827 | IM:-1.6518 | LMMD:0.0000 | FT(total):-0.8692 | D-acc:0.6372 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6446 | G(adver):0.9268 | IM:-1.6502 | LMMD:0.0000 | FT(total):-0.7235 | D-acc:0.6372 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6358 | G(adver):0.8723 | IM:-1.6793 | LMMD:0.0000 | FT(total):-0.8070 | D-acc:0.6499 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6473 | G(adver):0.8591 | IM:-1.6757 | LMMD:0.0010 | FT(total):-0.8156 | D-acc:0.6270 | cov:50.63% margin:0.956 | loss_lmmd:0.0010
+[ADDA] Ep 7/10 | D:0.6821 | G(adver):0.7954 | IM:-1.6866 | LMMD:0.0119 | FT(total):-0.8794 | D-acc:0.5438 | cov:59.17% margin:0.958 | loss_lmmd:0.0127
+[ADDA] Ep 8/10 | D:0.6884 | G(adver):0.7724 | IM:-1.6658 | LMMD:0.0646 | FT(total):-0.8288 | D-acc:0.5402 | cov:52.11% margin:0.961 | loss_lmmd:0.0509
+[ADDA] Ep 9/10 | D:0.6697 | G(adver):0.7725 | IM:-1.6761 | LMMD:0.1581 | FT(total):-0.7456 | D-acc:0.5756 | cov:85.32% margin:0.969 | loss_lmmd:0.1488
+[ADDA] Ep 10/10 | D:0.6852 | G(adver):0.7863 | IM:-1.6796 | LMMD:0.1485 | FT(total):-0.7448 | D-acc:0.5559 | cov:74.07% margin:0.966 | loss_lmmd:0.1573
+[INFO] Evaluating on target test set...
+- test Loss: 0.410688, test Acc: 0.9385
+
+========== RUN 3 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.8188
+[SRC PRETRAIN] Epoch 2/10 | cls:0.1020
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0558
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0336
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0182
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0111
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0083
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0048
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0022
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0010
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7287 | G(adver):0.7762 | IM:-1.5046 | LMMD:0.0000 | FT(total):-0.7284 | D-acc:0.4494 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7054 | G(adver):0.7159 | IM:-1.6055 | LMMD:0.0000 | FT(total):-0.8896 | D-acc:0.5055 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6789 | G(adver):0.7396 | IM:-1.6207 | LMMD:0.0000 | FT(total):-0.8812 | D-acc:0.5492 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6720 | G(adver):0.7478 | IM:-1.6696 | LMMD:0.0000 | FT(total):-0.9218 | D-acc:0.5685 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6720 | G(adver):0.7712 | IM:-1.6906 | LMMD:0.0000 | FT(total):-0.9194 | D-acc:0.5668 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6642 | G(adver):0.8055 | IM:-1.6898 | LMMD:0.0012 | FT(total):-0.8831 | D-acc:0.5945 | cov:71.89% margin:0.955 | loss_lmmd:0.0014
+[ADDA] Ep 7/10 | D:0.6932 | G(adver):0.7667 | IM:-1.6820 | LMMD:0.0043 | FT(total):-0.9110 | D-acc:0.5152 | cov:8.68% margin:0.938 | loss_lmmd:0.0038
+[ADDA] Ep 8/10 | D:0.6894 | G(adver):0.7137 | IM:-1.6831 | LMMD:0.0821 | FT(total):-0.8873 | D-acc:0.5190 | cov:75.32% margin:0.959 | loss_lmmd:0.0774
+[ADDA] Ep 9/10 | D:0.6761 | G(adver):0.7368 | IM:-1.6780 | LMMD:0.1445 | FT(total):-0.7968 | D-acc:0.5645 | cov:85.45% margin:0.959 | loss_lmmd:0.1616
+[ADDA] Ep 10/10 | D:0.6808 | G(adver):0.7581 | IM:-1.6690 | LMMD:0.1085 | FT(total):-0.8024 | D-acc:0.5470 | cov:56.04% margin:0.955 | loss_lmmd:0.1141
+[INFO] Evaluating on target test set...
+- test Loss: 2.174943, test Acc: 0.7843
+
+========== RUN 4 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.8607
+[SRC PRETRAIN] Epoch 2/10 | cls:0.1051
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0467
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0315
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0184
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0040
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0050
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0010
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0006
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0005
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7408 | G(adver):0.7041 | IM:-1.5434 | LMMD:0.0000 | FT(total):-0.8393 | D-acc:0.3935 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6836 | G(adver):0.7230 | IM:-1.6606 | LMMD:0.0000 | FT(total):-0.9376 | D-acc:0.5382 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6529 | G(adver):0.8164 | IM:-1.6683 | LMMD:0.0000 | FT(total):-0.8519 | D-acc:0.6276 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.4989 | G(adver):1.2473 | IM:-1.6349 | LMMD:0.0000 | FT(total):-0.3876 | D-acc:0.8060 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.3503 | G(adver):1.7943 | IM:-1.5914 | LMMD:0.0000 | FT(total):0.2029 | D-acc:0.9084 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.2412 | G(adver):2.2145 | IM:-1.5906 | LMMD:0.0004 | FT(total):0.6244 | D-acc:0.9490 | cov:7.29% margin:0.941 | loss_lmmd:0.0000
+[ADDA] Ep 7/10 | D:0.1988 | G(adver):2.6122 | IM:-1.5786 | LMMD:0.0066 | FT(total):1.0403 | D-acc:0.9590 | cov:11.78% margin:0.951 | loss_lmmd:0.0069
+[ADDA] Ep 8/10 | D:0.1581 | G(adver):2.9261 | IM:-1.5845 | LMMD:0.0048 | FT(total):1.3464 | D-acc:0.9722 | cov:0.53% margin:0.928 | loss_lmmd:0.0000
+[ADDA] Ep 9/10 | D:0.1190 | G(adver):3.3739 | IM:-1.5592 | LMMD:0.1131 | FT(total):1.9277 | D-acc:0.9801 | cov:34.74% margin:0.951 | loss_lmmd:0.0908
+[ADDA] Ep 10/10 | D:0.0948 | G(adver):3.7253 | IM:-1.5885 | LMMD:0.0470 | FT(total):2.1838 | D-acc:0.9870 | cov:12.95% margin:0.947 | loss_lmmd:0.0581
+[INFO] Evaluating on target test set...
+- test Loss: 0.372830, test Acc: 0.9496
+[INFO] Loading HC_T188 ...
+
+========== RUN 0 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.7620
+[SRC PRETRAIN] Epoch 2/10 | cls:0.1135
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0378
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0394
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0289
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0085
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0187
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0080
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0037
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0025
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7471 | G(adver):0.8118 | IM:-1.3009 | LMMD:0.0000 | FT(total):-0.4891 | D-acc:0.4523 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7089 | G(adver):0.7208 | IM:-1.4874 | LMMD:0.0000 | FT(total):-0.7666 | D-acc:0.4707 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6720 | G(adver):0.7543 | IM:-1.5891 | LMMD:0.0000 | FT(total):-0.8347 | D-acc:0.5923 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6856 | G(adver):0.7291 | IM:-1.6022 | LMMD:0.0000 | FT(total):-0.8731 | D-acc:0.5039 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6877 | G(adver):0.7274 | IM:-1.6435 | LMMD:0.0000 | FT(total):-0.9161 | D-acc:0.5032 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6796 | G(adver):0.7288 | IM:-1.6456 | LMMD:0.0010 | FT(total):-0.9157 | D-acc:0.5365 | cov:66.68% margin:0.949 | loss_lmmd:0.0012
+[ADDA] Ep 7/10 | D:0.6869 | G(adver):0.7293 | IM:-1.6503 | LMMD:0.0104 | FT(total):-0.9106 | D-acc:0.5343 | cov:62.75% margin:0.954 | loss_lmmd:0.0097
+[ADDA] Ep 8/10 | D:0.6791 | G(adver):0.7356 | IM:-1.6369 | LMMD:0.0788 | FT(total):-0.8225 | D-acc:0.5483 | cov:82.40% margin:0.954 | loss_lmmd:0.0670
+[ADDA] Ep 9/10 | D:0.6831 | G(adver):0.7335 | IM:-1.6472 | LMMD:0.1078 | FT(total):-0.8059 | D-acc:0.5556 | cov:62.85% margin:0.958 | loss_lmmd:0.1183
+[ADDA] Ep 10/10 | D:0.6777 | G(adver):0.7400 | IM:-1.6486 | LMMD:0.1331 | FT(total):-0.7754 | D-acc:0.5562 | cov:80.57% margin:0.961 | loss_lmmd:0.1545
+[INFO] Evaluating on target test set...
+- test Loss: 3.596396, test Acc: 0.6763
+
+========== RUN 1 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:1.0811
+[SRC PRETRAIN] Epoch 2/10 | cls:0.3098
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0984
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0874
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0132
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0103
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0108
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0085
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0037
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0022
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7098 | G(adver):0.9015 | IM:-1.3474 | LMMD:0.0000 | FT(total):-0.4460 | D-acc:0.5104 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7018 | G(adver):0.7445 | IM:-1.5081 | LMMD:0.0000 | FT(total):-0.7636 | D-acc:0.5053 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6648 | G(adver):0.7862 | IM:-1.5437 | LMMD:0.0000 | FT(total):-0.7575 | D-acc:0.5917 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6900 | G(adver):0.7665 | IM:-1.5744 | LMMD:0.0000 | FT(total):-0.8080 | D-acc:0.5285 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6763 | G(adver):0.7575 | IM:-1.5763 | LMMD:0.0000 | FT(total):-0.8188 | D-acc:0.5603 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.7092 | G(adver):0.7059 | IM:-1.6379 | LMMD:0.0006 | FT(total):-0.9314 | D-acc:0.4760 | cov:18.20% margin:0.950 | loss_lmmd:0.0005
+[ADDA] Ep 7/10 | D:0.6869 | G(adver):0.7213 | IM:-1.6486 | LMMD:0.0067 | FT(total):-0.9207 | D-acc:0.5315 | cov:30.71% margin:0.950 | loss_lmmd:0.0060
+[ADDA] Ep 8/10 | D:0.6851 | G(adver):0.7219 | IM:-1.6650 | LMMD:0.0574 | FT(total):-0.8858 | D-acc:0.5519 | cov:47.66% margin:0.949 | loss_lmmd:0.0570
+[ADDA] Ep 9/10 | D:0.6889 | G(adver):0.7324 | IM:-1.6592 | LMMD:0.0916 | FT(total):-0.8351 | D-acc:0.5344 | cov:41.14% margin:0.950 | loss_lmmd:0.0949
+[ADDA] Ep 10/10 | D:0.7034 | G(adver):0.7207 | IM:-1.6662 | LMMD:0.0635 | FT(total):-0.8820 | D-acc:0.4869 | cov:23.94% margin:0.951 | loss_lmmd:0.0774
+[INFO] Evaluating on target test set...
+- test Loss: 0.777592, test Acc: 0.8759
+
+========== RUN 2 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:1.0443
+[SRC PRETRAIN] Epoch 2/10 | cls:0.2079
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0855
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0771
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0387
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0219
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0132
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0091
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0043
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0046
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7416 | G(adver):0.7277 | IM:-1.4315 | LMMD:0.0000 | FT(total):-0.7038 | D-acc:0.4107 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6625 | G(adver):0.7760 | IM:-1.5480 | LMMD:0.0000 | FT(total):-0.7720 | D-acc:0.6152 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6757 | G(adver):0.7866 | IM:-1.6725 | LMMD:0.0000 | FT(total):-0.8859 | D-acc:0.5624 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6767 | G(adver):0.7665 | IM:-1.6852 | LMMD:0.0000 | FT(total):-0.9188 | D-acc:0.5601 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6872 | G(adver):0.7407 | IM:-1.6861 | LMMD:0.0000 | FT(total):-0.9454 | D-acc:0.5350 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6978 | G(adver):0.7194 | IM:-1.6951 | LMMD:0.0008 | FT(total):-0.9749 | D-acc:0.4764 | cov:50.41% margin:0.950 | loss_lmmd:0.0007
+[ADDA] Ep 7/10 | D:0.7153 | G(adver):0.7040 | IM:-1.6833 | LMMD:0.0082 | FT(total):-0.9711 | D-acc:0.4232 | cov:48.96% margin:0.949 | loss_lmmd:0.0074
+[ADDA] Ep 8/10 | D:0.7040 | G(adver):0.6929 | IM:-1.6801 | LMMD:0.0620 | FT(total):-0.9252 | D-acc:0.4346 | cov:63.90% margin:0.953 | loss_lmmd:0.0584
+[ADDA] Ep 9/10 | D:0.6966 | G(adver):0.7026 | IM:-1.6927 | LMMD:0.1199 | FT(total):-0.8702 | D-acc:0.4614 | cov:72.62% margin:0.952 | loss_lmmd:0.1346
+[ADDA] Ep 10/10 | D:0.6932 | G(adver):0.6992 | IM:-1.6899 | LMMD:0.1323 | FT(total):-0.8584 | D-acc:0.4859 | cov:81.98% margin:0.956 | loss_lmmd:0.1073
+[INFO] Evaluating on target test set...
+- test Loss: 2.676182, test Acc: 0.7448
+
+========== RUN 3 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.7437
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0564
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0391
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0259
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0176
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0126
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0147
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0041
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0014
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0016
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.8003 | G(adver):0.7112 | IM:-1.4309 | LMMD:0.0000 | FT(total):-0.7197 | D-acc:0.2665 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7125 | G(adver):0.6904 | IM:-1.5859 | LMMD:0.0000 | FT(total):-0.8955 | D-acc:0.3687 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6793 | G(adver):0.7225 | IM:-1.6873 | LMMD:0.0000 | FT(total):-0.9648 | D-acc:0.5833 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6917 | G(adver):0.7165 | IM:-1.6914 | LMMD:0.0000 | FT(total):-0.9749 | D-acc:0.5151 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6983 | G(adver):0.6982 | IM:-1.6927 | LMMD:0.0000 | FT(total):-0.9944 | D-acc:0.4934 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6942 | G(adver):0.7193 | IM:-1.6994 | LMMD:0.0011 | FT(total):-0.9791 | D-acc:0.5096 | cov:57.13% margin:0.957 | loss_lmmd:0.0013
+[ADDA] Ep 7/10 | D:0.6977 | G(adver):0.7031 | IM:-1.7029 | LMMD:0.0152 | FT(total):-0.9847 | D-acc:0.4773 | cov:92.35% margin:0.966 | loss_lmmd:0.0157
+[ADDA] Ep 8/10 | D:0.6971 | G(adver):0.7034 | IM:-1.6793 | LMMD:0.0804 | FT(total):-0.8954 | D-acc:0.4988 | cov:79.52% margin:0.953 | loss_lmmd:0.0780
+[ADDA] Ep 9/10 | D:0.7039 | G(adver):0.7037 | IM:-1.6822 | LMMD:0.1568 | FT(total):-0.8216 | D-acc:0.4510 | cov:89.30% margin:0.968 | loss_lmmd:0.1318
+[ADDA] Ep 10/10 | D:0.6981 | G(adver):0.7036 | IM:-1.7110 | LMMD:0.1445 | FT(total):-0.8630 | D-acc:0.4626 | cov:86.19% margin:0.961 | loss_lmmd:0.1690
+[INFO] Evaluating on target test set...
+- test Loss: 0.544722, test Acc: 0.9384
+
+========== RUN 4 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.7672
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0945
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0545
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0396
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0192
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0087
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0095
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0102
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0022
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0011
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7624 | G(adver):0.7658 | IM:-1.4336 | LMMD:0.0000 | FT(total):-0.6678 | D-acc:0.3899 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6963 | G(adver):0.7271 | IM:-1.5913 | LMMD:0.0000 | FT(total):-0.8642 | D-acc:0.4822 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6850 | G(adver):0.7349 | IM:-1.6131 | LMMD:0.0000 | FT(total):-0.8782 | D-acc:0.5524 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6884 | G(adver):0.7246 | IM:-1.6311 | LMMD:0.0000 | FT(total):-0.9065 | D-acc:0.5470 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.7003 | G(adver):0.7164 | IM:-1.6702 | LMMD:0.0000 | FT(total):-0.9538 | D-acc:0.4808 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.7010 | G(adver):0.6997 | IM:-1.6886 | LMMD:0.0012 | FT(total):-0.9877 | D-acc:0.4645 | cov:66.83% margin:0.953 | loss_lmmd:0.0013
+[ADDA] Ep 7/10 | D:0.7017 | G(adver):0.6950 | IM:-1.7006 | LMMD:0.0109 | FT(total):-0.9948 | D-acc:0.4697 | cov:56.33% margin:0.955 | loss_lmmd:0.0106
+[ADDA] Ep 8/10 | D:0.6954 | G(adver):0.6983 | IM:-1.7109 | LMMD:0.0857 | FT(total):-0.9268 | D-acc:0.4818 | cov:88.89% margin:0.963 | loss_lmmd:0.0789
+[ADDA] Ep 9/10 | D:0.6966 | G(adver):0.7020 | IM:-1.6899 | LMMD:0.1352 | FT(total):-0.8527 | D-acc:0.4967 | cov:83.05% margin:0.958 | loss_lmmd:0.1197
+[ADDA] Ep 10/10 | D:0.7022 | G(adver):0.6966 | IM:-1.7117 | LMMD:0.1558 | FT(total):-0.8593 | D-acc:0.4689 | cov:93.21% margin:0.966 | loss_lmmd:0.1532
+[INFO] Evaluating on target test set...
+- test Loss: 0.326532, test Acc: 0.9672
+[INFO] Loading HC_T191 ...
+
+========== RUN 0 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.4066
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0505
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0396
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0178
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0097
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0201
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0045
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0009
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0012
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0005
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7557 | G(adver):0.7841 | IM:-1.4175 | LMMD:0.0000 | FT(total):-0.6334 | D-acc:0.4058 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7308 | G(adver):0.6812 | IM:-1.5934 | LMMD:0.0000 | FT(total):-0.9122 | D-acc:0.3721 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6839 | G(adver):0.7186 | IM:-1.6625 | LMMD:0.0000 | FT(total):-0.9439 | D-acc:0.5632 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6923 | G(adver):0.7129 | IM:-1.6541 | LMMD:0.0000 | FT(total):-0.9412 | D-acc:0.5246 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6865 | G(adver):0.7228 | IM:-1.6536 | LMMD:0.0000 | FT(total):-0.9308 | D-acc:0.5300 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6958 | G(adver):0.7137 | IM:-1.6471 | LMMD:0.0013 | FT(total):-0.9320 | D-acc:0.4867 | cov:76.68% margin:0.962 | loss_lmmd:0.0012
+[ADDA] Ep 7/10 | D:0.7005 | G(adver):0.7013 | IM:-1.6863 | LMMD:0.0129 | FT(total):-0.9721 | D-acc:0.4568 | cov:68.95% margin:0.960 | loss_lmmd:0.0154
+[ADDA] Ep 8/10 | D:0.7006 | G(adver):0.6982 | IM:-1.6818 | LMMD:0.0682 | FT(total):-0.9154 | D-acc:0.4660 | cov:59.48% margin:0.962 | loss_lmmd:0.0562
+[ADDA] Ep 9/10 | D:0.6959 | G(adver):0.7021 | IM:-1.6938 | LMMD:0.1553 | FT(total):-0.8364 | D-acc:0.4861 | cov:83.88% margin:0.966 | loss_lmmd:0.1288
+[ADDA] Ep 10/10 | D:0.6912 | G(adver):0.7039 | IM:-1.6944 | LMMD:0.1568 | FT(total):-0.8337 | D-acc:0.5017 | cov:89.78% margin:0.968 | loss_lmmd:0.1251
+[INFO] Evaluating on target test set...
+- test Loss: 3.966358, test Acc: 0.6149
+
+========== RUN 1 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.6218
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0614
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0292
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0269
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0165
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0150
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0072
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0022
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0010
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0006
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.6594 | G(adver):0.9428 | IM:-1.3133 | LMMD:0.0000 | FT(total):-0.3706 | D-acc:0.5938 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.5538 | G(adver):1.1662 | IM:-1.4438 | LMMD:0.0000 | FT(total):-0.2776 | D-acc:0.7426 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.5635 | G(adver):1.1844 | IM:-1.5156 | LMMD:0.0000 | FT(total):-0.3311 | D-acc:0.7181 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.5971 | G(adver):1.0355 | IM:-1.5503 | LMMD:0.0000 | FT(total):-0.5148 | D-acc:0.6685 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6123 | G(adver):0.9729 | IM:-1.5513 | LMMD:0.0000 | FT(total):-0.5785 | D-acc:0.6579 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6333 | G(adver):0.8892 | IM:-1.5783 | LMMD:0.0009 | FT(total):-0.6882 | D-acc:0.6281 | cov:56.00% margin:0.967 | loss_lmmd:0.0008
+[ADDA] Ep 7/10 | D:0.6337 | G(adver):0.8766 | IM:-1.5958 | LMMD:0.0114 | FT(total):-0.7078 | D-acc:0.6317 | cov:57.38% margin:0.962 | loss_lmmd:0.0099
+[ADDA] Ep 8/10 | D:0.6293 | G(adver):0.8630 | IM:-1.6046 | LMMD:0.0821 | FT(total):-0.6595 | D-acc:0.6226 | cov:73.17% margin:0.964 | loss_lmmd:0.0745
+[ADDA] Ep 9/10 | D:0.6287 | G(adver):0.8605 | IM:-1.6044 | LMMD:0.1442 | FT(total):-0.5998 | D-acc:0.6270 | cov:75.80% margin:0.965 | loss_lmmd:0.1236
+[ADDA] Ep 10/10 | D:0.6393 | G(adver):0.8672 | IM:-1.6172 | LMMD:0.1286 | FT(total):-0.6213 | D-acc:0.6061 | cov:62.92% margin:0.958 | loss_lmmd:0.1484
+[INFO] Evaluating on target test set...
+- test Loss: 4.666845, test Acc: 0.5564
+
+========== RUN 2 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.7933
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0872
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0617
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0126
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0126
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0154
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0068
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0020
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0011
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0007
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7432 | G(adver):0.7223 | IM:-1.5161 | LMMD:0.0000 | FT(total):-0.7938 | D-acc:0.3858 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6775 | G(adver):0.7402 | IM:-1.6682 | LMMD:0.0000 | FT(total):-0.9280 | D-acc:0.5619 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6718 | G(adver):0.7823 | IM:-1.6941 | LMMD:0.0000 | FT(total):-0.9118 | D-acc:0.5570 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6775 | G(adver):0.7632 | IM:-1.6943 | LMMD:0.0000 | FT(total):-0.9311 | D-acc:0.5524 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6744 | G(adver):0.7613 | IM:-1.7081 | LMMD:0.0000 | FT(total):-0.9468 | D-acc:0.5822 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6596 | G(adver):0.8276 | IM:-1.6876 | LMMD:0.0011 | FT(total):-0.8589 | D-acc:0.6337 | cov:66.12% margin:0.956 | loss_lmmd:0.0009
+[ADDA] Ep 7/10 | D:0.6854 | G(adver):0.7591 | IM:-1.7063 | LMMD:0.0099 | FT(total):-0.9372 | D-acc:0.5478 | cov:57.70% margin:0.956 | loss_lmmd:0.0079
+[ADDA] Ep 8/10 | D:0.6722 | G(adver):0.7733 | IM:-1.7070 | LMMD:0.0733 | FT(total):-0.8604 | D-acc:0.5856 | cov:78.27% margin:0.961 | loss_lmmd:0.0685
+[ADDA] Ep 9/10 | D:0.6776 | G(adver):0.7812 | IM:-1.7069 | LMMD:0.1237 | FT(total):-0.8019 | D-acc:0.5576 | cov:75.70% margin:0.961 | loss_lmmd:0.1062
+[ADDA] Ep 10/10 | D:0.6804 | G(adver):0.7897 | IM:-1.7060 | LMMD:0.1284 | FT(total):-0.7879 | D-acc:0.5579 | cov:72.15% margin:0.960 | loss_lmmd:0.1099
+[INFO] Evaluating on target test set...
+- test Loss: 1.984815, test Acc: 0.7921
+
+========== RUN 3 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.6181
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0520
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0483
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0246
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0300
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0213
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0055
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0038
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0020
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0008
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7367 | G(adver):0.7738 | IM:-1.4240 | LMMD:0.0000 | FT(total):-0.6501 | D-acc:0.4341 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6822 | G(adver):0.7448 | IM:-1.5965 | LMMD:0.0000 | FT(total):-0.8517 | D-acc:0.5349 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.7124 | G(adver):0.7232 | IM:-1.6790 | LMMD:0.0000 | FT(total):-0.9557 | D-acc:0.4562 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6889 | G(adver):0.7145 | IM:-1.6969 | LMMD:0.0000 | FT(total):-0.9823 | D-acc:0.5364 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6950 | G(adver):0.7206 | IM:-1.7058 | LMMD:0.0000 | FT(total):-0.9852 | D-acc:0.5124 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6967 | G(adver):0.7043 | IM:-1.7047 | LMMD:0.0014 | FT(total):-0.9991 | D-acc:0.4925 | cov:92.62% margin:0.964 | loss_lmmd:0.0014
+[ADDA] Ep 7/10 | D:0.6955 | G(adver):0.6998 | IM:-1.7042 | LMMD:0.0142 | FT(total):-0.9901 | D-acc:0.5101 | cov:93.75% margin:0.966 | loss_lmmd:0.0158
+[ADDA] Ep 8/10 | D:0.6945 | G(adver):0.7092 | IM:-1.6993 | LMMD:0.0835 | FT(total):-0.9065 | D-acc:0.4986 | cov:89.22% margin:0.963 | loss_lmmd:0.0634
+[ADDA] Ep 9/10 | D:0.6967 | G(adver):0.7045 | IM:-1.7107 | LMMD:0.1492 | FT(total):-0.8569 | D-acc:0.4937 | cov:96.23% margin:0.966 | loss_lmmd:0.1581
+[ADDA] Ep 10/10 | D:0.6974 | G(adver):0.7036 | IM:-1.7190 | LMMD:0.1568 | FT(total):-0.8586 | D-acc:0.4767 | cov:95.93% margin:0.970 | loss_lmmd:0.2128
+[INFO] Evaluating on target test set...
+- test Loss: 3.184082, test Acc: 0.5960
+
+========== RUN 4 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.3385
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0856
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0283
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0215
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0149
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0025
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0094
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0044
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0023
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0012
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7473 | G(adver):0.7342 | IM:-1.4523 | LMMD:0.0000 | FT(total):-0.7181 | D-acc:0.3676 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6970 | G(adver):0.7121 | IM:-1.5609 | LMMD:0.0000 | FT(total):-0.8489 | D-acc:0.4936 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6792 | G(adver):0.7331 | IM:-1.5821 | LMMD:0.0000 | FT(total):-0.8490 | D-acc:0.5713 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.7029 | G(adver):0.7202 | IM:-1.6282 | LMMD:0.0000 | FT(total):-0.9080 | D-acc:0.4568 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6992 | G(adver):0.7021 | IM:-1.6861 | LMMD:0.0000 | FT(total):-0.9840 | D-acc:0.4734 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6966 | G(adver):0.7013 | IM:-1.7010 | LMMD:0.0013 | FT(total):-0.9983 | D-acc:0.5024 | cov:93.95% margin:0.969 | loss_lmmd:0.0015
+[ADDA] Ep 7/10 | D:0.6954 | G(adver):0.7010 | IM:-1.6888 | LMMD:0.0146 | FT(total):-0.9732 | D-acc:0.5049 | cov:89.50% margin:0.970 | loss_lmmd:0.0143
+[ADDA] Ep 8/10 | D:0.6955 | G(adver):0.7016 | IM:-1.6876 | LMMD:0.0895 | FT(total):-0.8964 | D-acc:0.4939 | cov:90.12% margin:0.971 | loss_lmmd:0.0835
+[ADDA] Ep 9/10 | D:0.6981 | G(adver):0.6991 | IM:-1.7018 | LMMD:0.1408 | FT(total):-0.8620 | D-acc:0.4863 | cov:91.50% margin:0.969 | loss_lmmd:0.1170
+[ADDA] Ep 10/10 | D:0.6981 | G(adver):0.6982 | IM:-1.7051 | LMMD:0.1490 | FT(total):-0.8579 | D-acc:0.4669 | cov:94.27% margin:0.974 | loss_lmmd:0.1293
+[INFO] Evaluating on target test set...
+- test Loss: 7.566146, test Acc: 0.3693
+[INFO] Loading HC_T194 ...
+
+========== RUN 0 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:1.0029
+[SRC PRETRAIN] Epoch 2/10 | cls:0.1395
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0410
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0288
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0151
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0207
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0073
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0037
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0023
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0025
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7543 | G(adver):0.7627 | IM:-1.2824 | LMMD:0.0000 | FT(total):-0.5197 | D-acc:0.4237 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7283 | G(adver):0.6952 | IM:-1.4982 | LMMD:0.0000 | FT(total):-0.8030 | D-acc:0.4311 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6768 | G(adver):0.7317 | IM:-1.5669 | LMMD:0.0000 | FT(total):-0.8352 | D-acc:0.5803 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6718 | G(adver):0.7406 | IM:-1.6174 | LMMD:0.0000 | FT(total):-0.8767 | D-acc:0.5810 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6659 | G(adver):0.7719 | IM:-1.6301 | LMMD:0.0000 | FT(total):-0.8582 | D-acc:0.5950 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6682 | G(adver):0.7950 | IM:-1.6433 | LMMD:0.0009 | FT(total):-0.8474 | D-acc:0.5612 | cov:39.88% margin:0.951 | loss_lmmd:0.0008
+[ADDA] Ep 7/10 | D:0.6862 | G(adver):0.7594 | IM:-1.6631 | LMMD:0.0095 | FT(total):-0.8942 | D-acc:0.5402 | cov:41.25% margin:0.949 | loss_lmmd:0.0082
+[ADDA] Ep 8/10 | D:0.6980 | G(adver):0.7160 | IM:-1.6688 | LMMD:0.0613 | FT(total):-0.8915 | D-acc:0.5101 | cov:52.57% margin:0.955 | loss_lmmd:0.0552
+[ADDA] Ep 9/10 | D:0.7070 | G(adver):0.6991 | IM:-1.6699 | LMMD:0.1020 | FT(total):-0.8689 | D-acc:0.4640 | cov:50.27% margin:0.957 | loss_lmmd:0.1119
+[ADDA] Ep 10/10 | D:0.6945 | G(adver):0.7143 | IM:-1.6959 | LMMD:0.1444 | FT(total):-0.8372 | D-acc:0.5207 | cov:81.98% margin:0.962 | loss_lmmd:0.1264
+[INFO] Evaluating on target test set...
+- test Loss: 2.228161, test Acc: 0.7722
+
+========== RUN 1 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.3609
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0516
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0464
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0252
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0222
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0099
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0094
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0036
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0020
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0007
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7799 | G(adver):0.7240 | IM:-1.5426 | LMMD:0.0000 | FT(total):-0.8186 | D-acc:0.2914 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7231 | G(adver):0.6847 | IM:-1.6455 | LMMD:0.0000 | FT(total):-0.9608 | D-acc:0.3626 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6704 | G(adver):0.7340 | IM:-1.6811 | LMMD:0.0000 | FT(total):-0.9471 | D-acc:0.6091 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6934 | G(adver):0.7124 | IM:-1.6834 | LMMD:0.0000 | FT(total):-0.9710 | D-acc:0.5161 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6807 | G(adver):0.7273 | IM:-1.6801 | LMMD:0.0000 | FT(total):-0.9528 | D-acc:0.5380 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6784 | G(adver):0.7424 | IM:-1.6720 | LMMD:0.0013 | FT(total):-0.9283 | D-acc:0.5435 | cov:75.46% margin:0.963 | loss_lmmd:0.0013
+[ADDA] Ep 7/10 | D:0.6790 | G(adver):0.7758 | IM:-1.6864 | LMMD:0.0133 | FT(total):-0.8973 | D-acc:0.5522 | cov:78.22% margin:0.965 | loss_lmmd:0.0142
+[ADDA] Ep 8/10 | D:0.6498 | G(adver):0.8102 | IM:-1.6745 | LMMD:0.0757 | FT(total):-0.7886 | D-acc:0.6190 | cov:70.02% margin:0.964 | loss_lmmd:0.0681
+[ADDA] Ep 9/10 | D:0.6619 | G(adver):0.8212 | IM:-1.6786 | LMMD:0.1392 | FT(total):-0.7182 | D-acc:0.5823 | cov:78.96% margin:0.959 | loss_lmmd:0.1469
+[ADDA] Ep 10/10 | D:0.6976 | G(adver):0.7407 | IM:-1.7017 | LMMD:0.1468 | FT(total):-0.8143 | D-acc:0.4972 | cov:84.27% margin:0.971 | loss_lmmd:0.1401
+[INFO] Evaluating on target test set...
+- test Loss: 6.241828, test Acc: 0.4484
+
+========== RUN 2 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.4664
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0481
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0403
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0111
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0133
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0099
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0045
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0036
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0005
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0004
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7928 | G(adver):0.7149 | IM:-1.4379 | LMMD:0.0000 | FT(total):-0.7230 | D-acc:0.2766 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7291 | G(adver):0.6702 | IM:-1.5520 | LMMD:0.0000 | FT(total):-0.8818 | D-acc:0.3787 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6865 | G(adver):0.7175 | IM:-1.5640 | LMMD:0.0000 | FT(total):-0.8465 | D-acc:0.5433 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6904 | G(adver):0.7109 | IM:-1.5744 | LMMD:0.0000 | FT(total):-0.8635 | D-acc:0.5189 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6950 | G(adver):0.7125 | IM:-1.6233 | LMMD:0.0000 | FT(total):-0.9108 | D-acc:0.4858 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6886 | G(adver):0.7079 | IM:-1.6629 | LMMD:0.0012 | FT(total):-0.9538 | D-acc:0.5310 | cov:72.60% margin:0.963 | loss_lmmd:0.0010
+[ADDA] Ep 7/10 | D:0.6891 | G(adver):0.7142 | IM:-1.6909 | LMMD:0.0128 | FT(total):-0.9639 | D-acc:0.5163 | cov:76.39% margin:0.964 | loss_lmmd:0.0149
+[ADDA] Ep 8/10 | D:0.6877 | G(adver):0.7271 | IM:-1.6798 | LMMD:0.0779 | FT(total):-0.8748 | D-acc:0.5183 | cov:75.90% margin:0.966 | loss_lmmd:0.0708
+[ADDA] Ep 9/10 | D:0.6757 | G(adver):0.7452 | IM:-1.6815 | LMMD:0.0846 | FT(total):-0.8517 | D-acc:0.5629 | cov:43.08% margin:0.960 | loss_lmmd:0.0720
+[ADDA] Ep 10/10 | D:0.6862 | G(adver):0.7391 | IM:-1.6667 | LMMD:0.1517 | FT(total):-0.7759 | D-acc:0.5157 | cov:75.38% margin:0.961 | loss_lmmd:0.1301
+[INFO] Evaluating on target test set...
+- test Loss: 5.925885, test Acc: 0.3912
+
+========== RUN 3 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.9241
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0700
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0695
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0197
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0143
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0166
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0074
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0045
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0010
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0008
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7361 | G(adver):0.7812 | IM:-1.2169 | LMMD:0.0000 | FT(total):-0.4356 | D-acc:0.4703 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6911 | G(adver):0.7349 | IM:-1.4391 | LMMD:0.0000 | FT(total):-0.7041 | D-acc:0.5081 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6343 | G(adver):0.8205 | IM:-1.5007 | LMMD:0.0000 | FT(total):-0.6802 | D-acc:0.6561 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6298 | G(adver):0.8975 | IM:-1.5799 | LMMD:0.0000 | FT(total):-0.6824 | D-acc:0.6561 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6584 | G(adver):0.8267 | IM:-1.5915 | LMMD:0.0000 | FT(total):-0.7648 | D-acc:0.6077 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6907 | G(adver):0.7592 | IM:-1.6210 | LMMD:0.0012 | FT(total):-0.8606 | D-acc:0.5379 | cov:70.43% margin:0.957 | loss_lmmd:0.0012
+[ADDA] Ep 7/10 | D:0.6881 | G(adver):0.7277 | IM:-1.6203 | LMMD:0.0134 | FT(total):-0.8792 | D-acc:0.5443 | cov:70.61% margin:0.961 | loss_lmmd:0.0146
+[ADDA] Ep 8/10 | D:0.6769 | G(adver):0.7428 | IM:-1.6373 | LMMD:0.0766 | FT(total):-0.8179 | D-acc:0.5763 | cov:73.14% margin:0.961 | loss_lmmd:0.0788
+[ADDA] Ep 9/10 | D:0.6863 | G(adver):0.7380 | IM:-1.6504 | LMMD:0.1441 | FT(total):-0.7682 | D-acc:0.5533 | cov:80.95% margin:0.964 | loss_lmmd:0.1115
+[ADDA] Ep 10/10 | D:0.6742 | G(adver):0.7501 | IM:-1.6596 | LMMD:0.1484 | FT(total):-0.7611 | D-acc:0.5786 | cov:81.08% margin:0.961 | loss_lmmd:0.1701
+[INFO] Evaluating on target test set...
+- test Loss: 5.623046, test Acc: 0.4423
+
+========== RUN 4 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.6732
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0973
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0705
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0508
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0221
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0159
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0119
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0044
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0033
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0020
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7678 | G(adver):0.7118 | IM:-1.3539 | LMMD:0.0000 | FT(total):-0.6421 | D-acc:0.3489 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7055 | G(adver):0.6870 | IM:-1.5685 | LMMD:0.0000 | FT(total):-0.8815 | D-acc:0.4657 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6840 | G(adver):0.7140 | IM:-1.6188 | LMMD:0.0000 | FT(total):-0.9048 | D-acc:0.5706 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6932 | G(adver):0.7072 | IM:-1.6322 | LMMD:0.0000 | FT(total):-0.9250 | D-acc:0.5224 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6919 | G(adver):0.7070 | IM:-1.6494 | LMMD:0.0000 | FT(total):-0.9424 | D-acc:0.5072 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6946 | G(adver):0.6991 | IM:-1.6666 | LMMD:0.0011 | FT(total):-0.9664 | D-acc:0.5038 | cov:73.52% margin:0.958 | loss_lmmd:0.0011
+[ADDA] Ep 7/10 | D:0.6910 | G(adver):0.7007 | IM:-1.6765 | LMMD:0.0109 | FT(total):-0.9649 | D-acc:0.5295 | cov:68.83% margin:0.958 | loss_lmmd:0.0120
+[ADDA] Ep 8/10 | D:0.6947 | G(adver):0.7002 | IM:-1.6741 | LMMD:0.0738 | FT(total):-0.9000 | D-acc:0.5029 | cov:82.65% margin:0.961 | loss_lmmd:0.0781
+[ADDA] Ep 9/10 | D:0.6943 | G(adver):0.6953 | IM:-1.6908 | LMMD:0.1301 | FT(total):-0.8654 | D-acc:0.5198 | cov:86.85% margin:0.966 | loss_lmmd:0.1397
+[ADDA] Ep 10/10 | D:0.6886 | G(adver):0.7048 | IM:-1.6899 | LMMD:0.1444 | FT(total):-0.8407 | D-acc:0.5430 | cov:91.91% margin:0.969 | loss_lmmd:0.1506
+[INFO] Evaluating on target test set...
+- test Loss: 3.040885, test Acc: 0.6823
+[INFO] Loading HC_T197 ...
+
+========== RUN 0 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.6955
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0734
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0656
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0360
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0345
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0123
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0038
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0016
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0009
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0007
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7685 | G(adver):0.7135 | IM:-1.5351 | LMMD:0.0000 | FT(total):-0.8216 | D-acc:0.3720 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7184 | G(adver):0.6945 | IM:-1.6790 | LMMD:0.0000 | FT(total):-0.9845 | D-acc:0.3952 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6805 | G(adver):0.7261 | IM:-1.6923 | LMMD:0.0000 | FT(total):-0.9662 | D-acc:0.5988 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6845 | G(adver):0.7299 | IM:-1.6940 | LMMD:0.0000 | FT(total):-0.9641 | D-acc:0.5559 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.7053 | G(adver):0.7075 | IM:-1.7004 | LMMD:0.0000 | FT(total):-0.9928 | D-acc:0.4573 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6925 | G(adver):0.7161 | IM:-1.7086 | LMMD:0.0011 | FT(total):-0.9913 | D-acc:0.5125 | cov:68.05% margin:0.959 | loss_lmmd:0.0011
+[ADDA] Ep 7/10 | D:0.6930 | G(adver):0.7158 | IM:-1.6985 | LMMD:0.0133 | FT(total):-0.9695 | D-acc:0.5048 | cov:83.45% margin:0.961 | loss_lmmd:0.0114
+[ADDA] Ep 8/10 | D:0.6912 | G(adver):0.7131 | IM:-1.7001 | LMMD:0.0795 | FT(total):-0.9076 | D-acc:0.5084 | cov:86.35% margin:0.957 | loss_lmmd:0.0837
+[ADDA] Ep 9/10 | D:0.6927 | G(adver):0.7187 | IM:-1.6900 | LMMD:0.1326 | FT(total):-0.8387 | D-acc:0.5069 | cov:77.00% margin:0.965 | loss_lmmd:0.1038
+[ADDA] Ep 10/10 | D:0.6983 | G(adver):0.7073 | IM:-1.7003 | LMMD:0.1540 | FT(total):-0.8390 | D-acc:0.4816 | cov:94.17% margin:0.969 | loss_lmmd:0.1366
+[INFO] Evaluating on target test set...
+- test Loss: 0.054696, test Acc: 0.9881
+
+========== RUN 1 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.6999
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0651
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0544
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0246
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0143
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0100
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0056
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0021
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0009
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0010
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7856 | G(adver):0.7030 | IM:-1.6099 | LMMD:0.0000 | FT(total):-0.9070 | D-acc:0.3158 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7022 | G(adver):0.7042 | IM:-1.6833 | LMMD:0.0000 | FT(total):-0.9791 | D-acc:0.4349 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6836 | G(adver):0.7177 | IM:-1.7023 | LMMD:0.0000 | FT(total):-0.9846 | D-acc:0.5447 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.7004 | G(adver):0.7106 | IM:-1.7029 | LMMD:0.0000 | FT(total):-0.9923 | D-acc:0.4482 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6969 | G(adver):0.7064 | IM:-1.7013 | LMMD:0.0000 | FT(total):-0.9949 | D-acc:0.5044 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6967 | G(adver):0.7035 | IM:-1.7059 | LMMD:0.0013 | FT(total):-1.0011 | D-acc:0.4885 | cov:90.77% margin:0.963 | loss_lmmd:0.0013
+[ADDA] Ep 7/10 | D:0.7016 | G(adver):0.6998 | IM:-1.7028 | LMMD:0.0122 | FT(total):-0.9908 | D-acc:0.4523 | cov:77.15% margin:0.959 | loss_lmmd:0.0121
+[ADDA] Ep 8/10 | D:0.6949 | G(adver):0.6983 | IM:-1.7146 | LMMD:0.0815 | FT(total):-0.9347 | D-acc:0.4963 | cov:89.75% margin:0.960 | loss_lmmd:0.0792
+[ADDA] Ep 9/10 | D:0.6969 | G(adver):0.6979 | IM:-1.7088 | LMMD:0.1427 | FT(total):-0.8682 | D-acc:0.4729 | cov:91.97% margin:0.964 | loss_lmmd:0.1325
+[ADDA] Ep 10/10 | D:0.6960 | G(adver):0.6987 | IM:-1.7156 | LMMD:0.1535 | FT(total):-0.8634 | D-acc:0.4692 | cov:95.40% margin:0.967 | loss_lmmd:0.1972
+[INFO] Evaluating on target test set...
+- test Loss: 0.037360, test Acc: 0.9921
+
+========== RUN 2 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.4640
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0495
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0436
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0288
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0298
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0136
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0051
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0037
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0018
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0008
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7394 | G(adver):0.7206 | IM:-1.6267 | LMMD:0.0000 | FT(total):-0.9062 | D-acc:0.3920 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6836 | G(adver):0.7328 | IM:-1.6816 | LMMD:0.0000 | FT(total):-0.9488 | D-acc:0.5274 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6870 | G(adver):0.7500 | IM:-1.6887 | LMMD:0.0000 | FT(total):-0.9387 | D-acc:0.5218 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6867 | G(adver):0.7345 | IM:-1.6986 | LMMD:0.0000 | FT(total):-0.9641 | D-acc:0.5228 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6910 | G(adver):0.7182 | IM:-1.7017 | LMMD:0.0000 | FT(total):-0.9835 | D-acc:0.5168 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6833 | G(adver):0.7279 | IM:-1.6919 | LMMD:0.0014 | FT(total):-0.9625 | D-acc:0.5652 | cov:85.95% margin:0.966 | loss_lmmd:0.0013
+[ADDA] Ep 7/10 | D:0.6857 | G(adver):0.7380 | IM:-1.7078 | LMMD:0.0147 | FT(total):-0.9551 | D-acc:0.5517 | cov:88.90% margin:0.962 | loss_lmmd:0.0129
+[ADDA] Ep 8/10 | D:0.6462 | G(adver):0.8365 | IM:-1.6854 | LMMD:0.0832 | FT(total):-0.7656 | D-acc:0.6448 | cov:81.25% margin:0.967 | loss_lmmd:0.0979
+[ADDA] Ep 9/10 | D:0.4291 | G(adver):1.4525 | IM:-1.6772 | LMMD:0.0851 | FT(total):-0.1397 | D-acc:0.8847 | cov:31.62% margin:0.948 | loss_lmmd:0.0857
+[ADDA] Ep 10/10 | D:0.2586 | G(adver):2.1365 | IM:-1.6592 | LMMD:0.0139 | FT(total):0.4912 | D-acc:0.9469 | cov:2.50% margin:0.939 | loss_lmmd:0.0262
+[INFO] Evaluating on target test set...
+- test Loss: 0.304725, test Acc: 0.9337
+
+========== RUN 3 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.7965
+[SRC PRETRAIN] Epoch 2/10 | cls:0.1025
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0626
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0347
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0131
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0276
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0128
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0079
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0074
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0029
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7357 | G(adver):0.7324 | IM:-1.5096 | LMMD:0.0000 | FT(total):-0.7772 | D-acc:0.4671 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.6777 | G(adver):0.7554 | IM:-1.5863 | LMMD:0.0000 | FT(total):-0.8309 | D-acc:0.5805 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6985 | G(adver):0.7221 | IM:-1.6415 | LMMD:0.0000 | FT(total):-0.9195 | D-acc:0.4868 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.7000 | G(adver):0.7061 | IM:-1.6794 | LMMD:0.0000 | FT(total):-0.9733 | D-acc:0.4642 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6935 | G(adver):0.7070 | IM:-1.6958 | LMMD:0.0000 | FT(total):-0.9888 | D-acc:0.4882 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.7051 | G(adver):0.6974 | IM:-1.6777 | LMMD:0.0012 | FT(total):-0.9791 | D-acc:0.4449 | cov:82.50% margin:0.955 | loss_lmmd:0.0009
+[ADDA] Ep 7/10 | D:0.6997 | G(adver):0.6950 | IM:-1.6998 | LMMD:0.0106 | FT(total):-0.9942 | D-acc:0.4417 | cov:65.58% margin:0.959 | loss_lmmd:0.0101
+[ADDA] Ep 8/10 | D:0.6963 | G(adver):0.6984 | IM:-1.7047 | LMMD:0.0748 | FT(total):-0.9314 | D-acc:0.4712 | cov:87.75% margin:0.961 | loss_lmmd:0.0729
+[ADDA] Ep 9/10 | D:0.6955 | G(adver):0.6975 | IM:-1.7058 | LMMD:0.1366 | FT(total):-0.8718 | D-acc:0.4811 | cov:88.45% margin:0.961 | loss_lmmd:0.1155
+[ADDA] Ep 10/10 | D:0.6979 | G(adver):0.6952 | IM:-1.7009 | LMMD:0.1466 | FT(total):-0.8591 | D-acc:0.4500 | cov:94.60% margin:0.962 | loss_lmmd:0.1514
+[INFO] Evaluating on target test set...
+- test Loss: 0.097482, test Acc: 0.9842
+
+========== RUN 4 (ADDA) ==========
+[INFO] SRC pretrain (Fs + C) ...
+[SRC PRETRAIN] Epoch 1/10 | cls:0.5859
+[SRC PRETRAIN] Epoch 2/10 | cls:0.0812
+[SRC PRETRAIN] Epoch 3/10 | cls:0.0378
+[SRC PRETRAIN] Epoch 4/10 | cls:0.0175
+[SRC PRETRAIN] Epoch 5/10 | cls:0.0147
+[SRC PRETRAIN] Epoch 6/10 | cls:0.0078
+[SRC PRETRAIN] Epoch 7/10 | cls:0.0055
+[SRC PRETRAIN] Epoch 8/10 | cls:0.0028
+[SRC PRETRAIN] Epoch 9/10 | cls:0.0021
+[SRC PRETRAIN] Epoch 10/10 | cls:0.0008
+[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...
+[ADDA] Ep 1/10 | D:0.7702 | G(adver):0.7071 | IM:-1.5413 | LMMD:0.0000 | FT(total):-0.8343 | D-acc:0.3533 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 2/10 | D:0.7021 | G(adver):0.7049 | IM:-1.6161 | LMMD:0.0000 | FT(total):-0.9112 | D-acc:0.4450 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 3/10 | D:0.6792 | G(adver):0.7358 | IM:-1.6471 | LMMD:0.0000 | FT(total):-0.9113 | D-acc:0.5709 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 4/10 | D:0.6839 | G(adver):0.7328 | IM:-1.6477 | LMMD:0.0000 | FT(total):-0.9150 | D-acc:0.5402 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 5/10 | D:0.6940 | G(adver):0.7258 | IM:-1.7046 | LMMD:0.0000 | FT(total):-0.9789 | D-acc:0.4942 | cov:0.00% margin:0.000 | loss_lmmd:0.0000
+[ADDA] Ep 6/10 | D:0.6883 | G(adver):0.7208 | IM:-1.6999 | LMMD:0.0013 | FT(total):-0.9778 | D-acc:0.5271 | cov:82.62% margin:0.960 | loss_lmmd:0.0016
+[ADDA] Ep 7/10 | D:0.6851 | G(adver):0.7311 | IM:-1.6913 | LMMD:0.0126 | FT(total):-0.9475 | D-acc:0.5527 | cov:73.60% margin:0.955 | loss_lmmd:0.0135
+[ADDA] Ep 8/10 | D:0.6961 | G(adver):0.7182 | IM:-1.7014 | LMMD:0.0753 | FT(total):-0.9079 | D-acc:0.4918 | cov:76.65% margin:0.963 | loss_lmmd:0.0583
+[ADDA] Ep 9/10 | D:0.6907 | G(adver):0.7214 | IM:-1.7050 | LMMD:0.1406 | FT(total):-0.8430 | D-acc:0.5106 | cov:92.20% margin:0.966 | loss_lmmd:0.1378
+[ADDA] Ep 10/10 | D:0.6997 | G(adver):0.7104 | IM:-1.7042 | LMMD:0.1494 | FT(total):-0.8445 | D-acc:0.4836 | cov:94.00% margin:0.967 | loss_lmmd:0.1376
+[INFO] Evaluating on target test set...
+- test Loss: 0.203747, test Acc: 0.9663

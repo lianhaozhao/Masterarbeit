@@ -21,16 +21,6 @@ def get_dataloaders(source_path, target_path, batch_size):
     src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
     return src_loader, tgt_loader
 
-def schedule_steps_by_epoch(epoch, num_epochs):
-    p = (epoch + 1) / max(1, num_epochs)  # 0→1
-    if p < 0.3:          # 早期：D 多 Ft 少
-        d_steps, ft_steps = 2, 1
-    elif p < 0.6:        # 中期：平衡
-        d_steps, ft_steps = 1, 1
-    else:                # 后期：Ft 多 D 少
-        d_steps, ft_steps = 1, 2
-    return d_steps, ft_steps
-
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
     if epoch < start_epoch: return 0.0
@@ -267,7 +257,7 @@ def train_adda_infomax_lmmd(
     src_model, tgt_model, source_loader, target_loader,
     device, num_epochs=20, num_classes=10,batch_size=16,
     # 判别器/优化器
-    lr_ft=1e-4, lr_d=1e-4, weight_decay=0.0,
+    lr_ft=1e-4, lr_d=1e-4, weight_decay=0.0,d_steps =1 ,ft_steps =1 ,
     # InfoMax
     im_T=1.0, im_weight=0.5, im_marg_w=1.0,
     # Pseudo+LMMD
@@ -280,7 +270,8 @@ def train_adda_infomax_lmmd(
     for p in tgt_model.classifier.parameters():
         p.requires_grad = False
     tgt_model.classifier.eval()
-    enc_params = [p for n, p in tgt_model.named_parameters() if not n.startswith('classifier')]
+    enc_params = list(tgt_model.feature_extractor.parameters()) \
+                 + list(tgt_model.feature_reducer.parameters())
     opt_ft = torch.optim.Adam(enc_params, lr=lr_ft, weight_decay=weight_decay)
 
     # 3) 通过一个 batch 推断特征维度，按需构造 D
@@ -307,7 +298,7 @@ def train_adda_infomax_lmmd(
             if pseudo_x.numel() > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
-        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=2e-1, start_epoch=lmmd_start_epoch)
+        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=12e-2, start_epoch=lmmd_start_epoch)
         def _lin(x, lo, hi):
             return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
         q_margin = _lin(margin_mean, 0.05, 0.50)
@@ -320,8 +311,10 @@ def train_adda_infomax_lmmd(
         len_src, len_tgt = len(source_loader), len(target_loader)
         len_pl  = len(pl_loader) if pl_loader is not None else 0
         steps = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
+        #新的迭代器
+        it_tgt_ft = iter(target_loader)
 
-        d_steps, ft_steps = schedule_steps_by_epoch(epoch, num_epochs)
+
 
         tgt_model.train()
         tgt_model.classifier.eval()
@@ -346,6 +339,8 @@ def train_adda_infomax_lmmd(
                 with torch.no_grad():
                     _, f_s, _= src_model(xs)       # [B, d]
                     _, f_t, _= tgt_model(xt)       # [B, d]
+                    f_s = F.normalize(f_s, dim=1)  # 关键：L2 归一化
+                    f_t = F.normalize(f_t, dim=1)
                 d_in  = torch.cat([f_s, f_t], dim=0)
                 d_lab = torch.cat([torch.ones(f_s.size(0)), torch.zeros(f_t.size(0))], dim=0).long().to(device)  # 1=source,0=target
                 d_out = D(d_in)
@@ -367,13 +362,20 @@ def train_adda_infomax_lmmd(
                 p.requires_grad = False
 
             for _k in range(ft_steps):
-                _, f_t, _  = tgt_model(xt)
-                logits_t = src_model.classifier(f_t)
+                try:
+                    xt_ft = next(it_tgt_ft)
+                except StopIteration:
+                    it_tgt_ft = iter(target_loader)
+                    xt_ft = next(it_tgt_ft)
+                xt_ft = xt_ft.to(device)
+                _, f_t, _  = tgt_model(xt_ft)
                 fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # 让 D 预测成“source” -1
-                g_out = D(f_t)
+                f_t_n = F.normalize(f_t, dim=1)
+                g_out = D(f_t_n)
                 loss_g = c_dom(g_out, fool_lab)
 
                 # InfoMax 正则 —— 更自信但不塌缩
+                logits_t = src_model.classifier(f_t)
                 loss_im, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=im_T, marg_weight=im_marg_w)
                 loss_im = im_weight * loss_im
 
@@ -403,10 +405,14 @@ def train_adda_infomax_lmmd(
                 opt_ft.zero_grad()
                 loss_ft.backward()
                 opt_ft.step()
-                g_loss_sum += loss_g.item()
-                im_loss_sum += float(loss_im) if torch.is_tensor(loss_im) else loss_im
-                mmd_loss_sum += float(loss_lmmd)
-                ft_loss_sum += float(loss_ft)
+
+                def to_scalar(x):
+                    return x.detach().item() if torch.is_tensor(x) else float(x)
+
+                g_loss_sum += to_scalar(loss_g)
+                im_loss_sum += to_scalar(loss_im)
+                mmd_loss_sum += to_scalar(loss_lmmd)
+                ft_loss_sum += to_scalar(loss_ft)
             for p in D.parameters():
                 p.requires_grad = True
             D.train()
@@ -453,7 +459,7 @@ if __name__ == "__main__":
 
         src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
         optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
-        scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs, eta_min=lr * 0.1)
+        scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs//2, eta_min=lr * 0.1)
         src_cls = nn.CrossEntropyLoss()
 
         print("[INFO] SRC pretrain (Fs + C) ...")
@@ -470,7 +476,7 @@ if __name__ == "__main__":
             src_model, tgt_model, src_loader, tgt_loader, device,
             num_epochs=num_epochs, num_classes=10,batch_size=bs,
             # 判别器/优化器
-            lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,
+            lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,d_steps =1 ,ft_steps =2 ,
             # InfoMax
             im_T=1.0, im_weight=0.8, im_marg_w=1.0,
             # LMMD
