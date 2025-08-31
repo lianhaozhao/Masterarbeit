@@ -61,7 +61,7 @@ def hyper_optimization(trial):
               based on validation loss, with factor fixed at 0.7 and patience at 3.
     """
 
-    batch_size = trial.suggest_categorical("batch_size", [32])
+    batch_size = trial.suggest_categorical("batch_size", [64])
     learning_rate = trial.suggest_float("learning_rate", 1e-5, 5e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-4, 1e-3, log=True)
     num_layers = trial.suggest_int("num_layers", 3, 7)

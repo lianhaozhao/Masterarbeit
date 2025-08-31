@@ -150,18 +150,17 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
         total += x.size(0)
         x_dev = x.to(device)
-        logits, _, _ = model(x_dev, grl=False)
-        prob = F.softmax(logits/T, dim=1)
-        top2 = torch.topk(prob, k=2, dim=1).values #Top-1 probability and Top-2 probability of each sample [B,2]
-        conf, _ = torch.max(prob, dim=1)  #Top-1 probability of each sample [B,1]
-        margin = top2[:,0] - top2[:,1] #The difference between the top-1 probability and the top-2 probability of each sample
+        logits, _ , _= model(x_dev)
+        prob = F.softmax(logits / T, dim=1)
+        top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
+        conf, _ = torch.max(prob, dim=1)            # [B]
+        margin = top2[:, 0] - top2[:, 1]            # [B]
         keep = conf >= threshold
         if keep.any():
-            xs.append(x[keep].cpu())
-            ys.append(prob[keep].argmax(dim=1).cpu().long())
-            # Use margin as sample weight (quality)
-            ws.append(margin[keep].cpu())
-            margins.append(margin[keep].cpu())
+            xs.append(x_dev[keep].detach().cpu())
+            ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
+            ws.append(margin[keep].detach().cpu())
+            margins.append(margin[keep].detach().cpu())
     if len(xs) == 0:
         x_cat = torch.empty(0); y_cat = torch.empty(0, dtype=torch.long); w_cat = torch.empty(0)
         cov = 0.0; margin_mean = 0.0

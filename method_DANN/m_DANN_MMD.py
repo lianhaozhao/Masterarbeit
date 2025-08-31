@@ -9,7 +9,7 @@ import yaml
 from models.Flexible_DANN_MMD import Flexible_DANN
 from PKLDataset import PKLDataset
 from utils.general_train_and_test import general_test_model
-from models.get_no_label_dataloader import get_target_loader
+from models.get_no_label_dataloader import get_dataloaders
 from models.MMD import *
 from collections import deque
 import torch.nn.functional as F
@@ -23,30 +23,6 @@ def set_seed(seed=42):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-def get_dataloaders(source_path, target_path, batch_size):
-    """
-            Construct the DataLoaders for the source domain and target domain.
-
-                Parameters:
-                    source_path (str): Path to the txt file of the source domain data.
-                                       Each line usually contains the sample file path and its label.
-                    target_path (str): Path to the txt file of the target domain data.
-                                       The target domain usually has no labels.
-                    batch_size (int): Number of samples in each batch.
-
-                Returns:
-                    tuple:
-                        - source_loader: DataLoader of the source domain,
-                          which returns batches in the format (x, y).
-                        - target_loader: DataLoader of the target domain,
-                          which returns x (without labels).
-
-
-            """
-    source_dataset = PKLDataset(txt_path=source_path)
-    source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)
-    target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
-    return source_loader, target_loader
 
 def score_metric(curr, w_gap=0.5, w_mmd=0.1):
     """

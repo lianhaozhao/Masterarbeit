@@ -8,18 +8,13 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from models.Flexible_DANN_pseudo_MMD import Flexible_DANN
 from PKLDataset import PKLDataset
-from models.get_no_label_dataloader import get_target_loader
+from models.get_no_label_dataloader import get_dataloaders
 from utils.general_train_and_test import general_test_model
 
 def set_seed(seed=42):
     torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
 
-def get_dataloaders(source_path, target_path, batch_size):
-    src_ds = PKLDataset(txt_path=source_path)
-    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
-    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
-    return src_loader, tgt_loader
 
 # DANN Lambda Scheduling (GRL only)
 def dann_lambda(epoch, num_epochs, max_lambda=0.5):
@@ -150,24 +145,20 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
         total += x.size(0)
         x_dev = x.to(device)
-        logits, _, _ = model(x_dev)
+        logits, _ , _= model(x_dev)
         prob = F.softmax(logits / T, dim=1)
         top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
-        conf, _ = torch.max(prob, dim=1)  # [B]
-        margin = top2[:, 0] - top2[:, 1]  # [B]
+        conf, _ = torch.max(prob, dim=1)            # [B]
+        margin = top2[:, 0] - top2[:, 1]            # [B]
         keep = conf >= threshold
         if keep.any():
-            # ---- 修改处：用 GPU 上的掩码索引 GPU 张量，再搬回 CPU ----
             xs.append(x_dev[keep].detach().cpu())
             ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
             ws.append(margin[keep].detach().cpu())
             margins.append(margin[keep].detach().cpu())
     if len(xs) == 0:
-        x_cat = torch.empty(0);
-        y_cat = torch.empty(0, dtype=torch.long);
-        w_cat = torch.empty(0)
-        cov = 0.0;
-        margin_mean = 0.0
+        x_cat = torch.empty(0); y_cat = torch.empty(0, dtype=torch.long); w_cat = torch.empty(0)
+        cov = 0.0; margin_mean = 0.0
     else:
         x_cat = torch.cat(xs, dim=0)
         y_cat = torch.cat(ys, dim=0)

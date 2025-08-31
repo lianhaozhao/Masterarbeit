@@ -27,3 +27,13 @@ DANN_LMMD_INFO:
   start_channels: 4
   num_epochs: 40
   early_stopping_patience: 3
+
+DANN_LMMD_INFO_2:
+  batch_size: 64
+  learning_rate: 9.000797694780627e-05
+  weight_decay: 0.00046759534090420386
+  num_layers: 5
+  kernel_size: 7
+  start_channels: 8
+  num_epochs: 40
+  early_stopping_patience: 3

@@ -1,10 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-
-
 # 距离与核函数基础工具
-
 
 def pdist_squared(x: torch.Tensor, y: torch.Tensor | None = None) -> torch.Tensor:
     """

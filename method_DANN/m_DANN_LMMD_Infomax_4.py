@@ -10,6 +10,7 @@ from models.Flexible_DANN_pseudo_MMD import Flexible_DANN
 from PKLDataset import PKLDataset
 from models.get_no_label_dataloader import get_target_loader
 from utils.general_train_and_test import general_test_model
+from models.generate_pseudo_labels_with_LMMD import pseudo_then_kmeans_select
 
 def set_seed(seed=42):
     torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
@@ -17,14 +18,14 @@ def set_seed(seed=42):
 
 def get_dataloaders(source_path, target_path, batch_size):
     src_ds = PKLDataset(txt_path=source_path)
-    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True, drop_last=True)
-    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True, drop_last=True)
+    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
+    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
     return src_loader, tgt_loader
 
 # DANN Lambda Scheduling (GRL only)
-def dann_lambda(epoch, num_epochs, max_lambda=0.35):
+def dann_lambda(epoch, num_epochs, max_lambda=0.5):
     p = epoch / max(1, num_epochs-1)
-    return (2.0 / (1.0 + np.exp(-7 * p)) - 1.0) * max_lambda
+    return (2.0 / (1.0 + np.exp(-10 * p)) - 1.0) * max_lambda
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
@@ -233,10 +234,10 @@ def train_dann_infomax_lmmd(model,
                             # InfoMax
                             im_T=1.0, im_weight=0.5, im_marg_w=1.0,
                             # Gating
-                            lmmd_start_epoch=5,lmmd_t=1
+                            lmmd_start_epoch=5,
                             ):
     # Hyperparameters related to early stopping
-    W = 5
+    W = 4
     GAP_TH = 0.05  # DomAcc distance threshold of 0.5 (the smaller the better alignment)
     PATIENCE = 3  # Stop after several rounds without improvement
 
@@ -256,17 +257,24 @@ def train_dann_infomax_lmmd(model,
         pseudo_w = torch.empty(0)
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
-            pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, target_loader, device, threshold=pseudo_thresh, T=lmmd_t
-            )
-            kept, total = stats["kept"], stats["total"]
-            cov, margin_mean = stats["coverage"], stats["margin_mean"]
+            pseudo_x, pseudo_y, pseudo_w, stats = pseudo_then_kmeans_select(
+                            model, target_loader, device, num_classes,
+                            epoch=epoch,
+                            T=1.0,
+                            conf_sched=(5, 20, 0.95, 0.90),    # 置信度阈值从 0.95 平滑降到 0.90
+                            tau_pur=0.80, dist_q=0.80, min_cluster_size=15,
+                            per_class_cap=None,                # 需要类平衡时，例如每类最多 500：per_class_cap=500
+                            bank_feats_cpu=None, bank_labels_cpu=None,   # 开启 kNN 校验时传入两个库
+                            knn_K=5, knn_sim_th=0.25
+                        )
+            kept = stats["num_clusters_valid"]
+            cov = stats["cov_after_cluster"]
             if kept > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
 
         # 2) Gated LMMD weights
-        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=12e-2, start_epoch=lmmd_start_epoch)
+        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=lmmd_start_epoch)
         # Quality q: Linearly normalize margin (0.05-0.5) and couple it with coverage (concave, to avoid high coverage but poor quality)
         def _lin(x, lo, hi):
             return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
@@ -274,7 +282,6 @@ def train_dann_infomax_lmmd(model,
         q_cov = math.sqrt(max(0.0, cov))  # concave
         q = q_margin * q_cov
         lambda_mmd_eff = lambda_mmd_base * q
-        # lambda_mmd_eff = max(0.015,lambda_mmd_base * q)
 
         # 3) epoch training
         model.train()
@@ -341,7 +348,7 @@ def train_dann_infomax_lmmd(model,
                 feat_tgt_pl_n = F.normalize(feat_tgt_pl, dim=1)
                 loss_lmmd = classwise_mmd_biased_weighted(
                     feat_src_n, src_y, feat_tgt_pl_n, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=3
+                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=2
                 )
                 loss_lmmd = lambda_mmd_eff * loss_lmmd
             else:
@@ -382,7 +389,7 @@ def train_dann_infomax_lmmd(model,
 
         print(f"[Epoch {epoch+1}] Total loss:{avg_tot:.4f} | Avg cls loss:{avg_cls:.4f} | avg Dom loss:{avg_dom:.4f} "
               f"| avg IM loss:{avg_im:.4f} | avg LMMD loss:{avg_mmd:.4f} | DomAcc:{dom_acc:.4f} | "
-              f"cov:{cov:.2%} margin:{margin_mean:.3f} | "
+              f"cov:{cov:.2%}  "
               f"λ_GRL:{model.lambda_:.4f} | λ_mmd_eff:{lambda_mmd_eff:.4f}")
 
         gap_hist.append(gap)
@@ -411,26 +418,26 @@ def train_dann_infomax_lmmd(model,
                     # Prioritize backloading the "plateau optimal"; otherwise, backloading the "global optimal"
                     if plateau_best_state is not None:
                         model.load_state_dict(plateau_best_state)
-                        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
+
                     elif best_state is not None:
                         model.load_state_dict(best_state)
-                        # torch.save(best_state, "./model/185_best.pth")
+
                     break
             else:
 
                 patience = 0
-        # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/target/test/HC_T191_RP.txt'
-        # test_dataset = PKLDataset(target_test_path)
-        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        # general_test_model(model, criterion_cls, test_loader, device)
+        print("[INFO] Evaluating on target test set...")
+        target_test_path = '../datasets/target/test/HC_T188_RP.txt'
+        test_dataset = PKLDataset(target_test_path)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        general_test_model(model, criterion_cls, test_loader, device)
 
     if plateau_best_state is not None:
         model.load_state_dict(plateau_best_state)
-        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
+
     elif best_state is not None:
         model.load_state_dict(best_state)
-        # torch.save(best_state, "./model/185_best.pth")
+
 
     return model
 
@@ -438,54 +445,36 @@ def train_dann_infomax_lmmd(model,
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
-    bs = cfg['batch_size']
-    lr = cfg['learning_rate']
-    wd = cfg['weight_decay']
-    num_layers = cfg['num_layers']
-    ksz = cfg['kernel_size']
-    sc = cfg['start_channels']
+    bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
+    num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
-    files = [188]
-    # files = [185, 188, 191, 194, 197]
-    for file in files:
+    src_path = '../datasets/source/train/DC_T197_RP.txt'
+    tgt_path = '../datasets/target/train/HC_T188_RP.txt'
+    tgt_test = '../datasets/target/test/HC_T188_RP.txt'
 
-        src_path = '../datasets/source/train/DC_T197_RP.txt'
-        tgt_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        tgt_test = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = Flexible_DANN(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
+                          cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
 
-        print(f"[INFO] Loading HC_T{file} ...")
+    src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
+    c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
 
-        for run_id in range(5):
-            print(f"\n========== RUN {run_id} ==========")
+    print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
+    model = train_dann_infomax_lmmd(
+        model, src_loader, tgt_loader,
+        optimizer, c_cls, c_dom, device,
+        num_epochs=num_epochs, num_classes=10,
+        pseudo_thresh=0.95,
+        scheduler=scheduler, batch_size=bs,
+        # InfoMax Hyperparameters
+        im_T=1.0, im_weight=0.5, im_marg_w=1.0,
+        lmmd_start_epoch=5,
+    )
 
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            model = Flexible_DANN(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                                  cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
-
-            src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
-            c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
-
-            print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
-            model = train_dann_infomax_lmmd(
-                model, src_loader, tgt_loader,
-                optimizer, c_cls, c_dom, device,
-                num_epochs=num_epochs, num_classes=10,
-                pseudo_thresh=0.95,
-                scheduler=scheduler, batch_size=bs,
-                # InfoMax Hyperparameters
-                im_T=1.0, im_weight=0.5, im_marg_w=1.0,
-                lmmd_start_epoch=5, lmmd_t=2
-            )
-
-            print("[INFO] Evaluating on target test set...")
-            test_ds = PKLDataset(tgt_test)
-            test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-            general_test_model(model, c_cls, test_loader, device)
-
-            del model, optimizer, scheduler, src_loader, tgt_loader, test_loader, test_ds
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
+    print("[INFO] Evaluating on target test set...")
+    test_ds = PKLDataset(tgt_test)
+    test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
+    general_test_model(model, c_cls, test_loader, device)
