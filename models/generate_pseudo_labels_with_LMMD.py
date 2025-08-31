@@ -1,5 +1,7 @@
 import torch
 import torch.nn.functional as F
+from sqlalchemy import false
+
 
 def generate_pseudo_labels(model, target_loader, device, threshold=0.9, return_conf=True):
     """
@@ -60,25 +62,23 @@ import math, numpy as np, torch
 import torch.nn.functional as F
 from sklearn.cluster import KMeans
 
-# ========== 1) 提取“全部目标样本”的特征 + 伪标签 + margin(避免二次前向) ==========
+# ========== 1) 提取“全部目标样本”的特征 + 伪标签  ==========
 @torch.no_grad()
-def extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0, normalize=True):
+def extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0, normalize=True, keep_inputs=True):
     """
-    对 target_loader 中的所有样本：提取 features、伪标签 y_hat、最大置信度 p_max、以及 top1-top2 margin。
+    对 target_loader 中的所有样本：提取 features、伪标签 y_hat、最大置信度 p_max，
+    并（可选）缓存原始输入 x（CPU），以便后续按索引切出 pseudo_x。
     注意：这是对“全部样本”做的（不带阈值筛）。
     """
     model.eval()
-    feats, y_hat, p_max, margins = [], [], [], []
+    xs, feats, y_hat, p_max = [], [], [], []
     for batch in target_loader:
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
-        x = x.to(device)
-        logits, _, feat = model(x)  # <--- 若 model 不返回 feat，请在此改为你的取法
+        x = x.to(device, non_blocking=True)
+        logits, _, feat = model(x,grl = False)
+
         prob = F.softmax(logits / T, dim=1)
         pm, yp = prob.max(dim=1)
-
-        # 直接顺手算 margin，避免后面再跑一次网络
-        top2 = torch.topk(prob, k=2, dim=1).values
-        margin = (top2[:, 0] - top2[:, 1])
 
         if normalize:
             feat = F.normalize(feat, dim=1)
@@ -86,13 +86,14 @@ def extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0, nor
         feats.append(feat.detach().cpu())
         y_hat.append(yp.detach().cpu())
         p_max.append(pm.detach().cpu())
-        margins.append(margin.detach().cpu())
+        if keep_inputs:
+            xs.append(x.detach().cpu())
 
-    feats = torch.cat(feats, dim=0)            # [N, D], CPU
-    y_hat = torch.cat(y_hat, dim=0).long()     # [N],  CPU
-    p_max = torch.cat(p_max, dim=0)            # [N],  CPU
-    margins_all = torch.cat(margins, dim=0)    # [N],  CPU
-    return feats, y_hat, p_max, margins_all
+    feats = torch.cat(feats, dim=0)             # [N, D], CPU
+    y_hat = torch.cat(y_hat, dim=0).long()      # [N],    CPU
+    p_max = torch.cat(p_max, dim=0)             # [N],    CPU
+    xs = torch.cat(xs, dim=0) if keep_inputs else None
+    return xs, feats, y_hat, p_max
 
 # ========== 2) 全局 KMeans + 簇-类统计（修正 dtype/contiguous） ==========
 def kmeans_global(feats_cpu, num_classes, seed=0, n_init=10):
@@ -180,53 +181,40 @@ def select_by_cluster_rules(
     }
     return keep_idx, d, stats
 
-# ========== 4) kNN 二次校验（源特征库；修正 dtype 一致性） ==========
-@torch.no_grad()
-def knn_second_pass(feats_sel_cpu, y_hat_sel_cpu, bank_feats_cpu, bank_labels_cpu, K=5, sim_th=0.20):
-    if feats_sel_cpu is None or len(feats_sel_cpu) == 0:
-        return torch.tensor([], dtype=torch.long)
-    # 统一到 float32，避免隐式类型提升
-    q = feats_sel_cpu.to(torch.float32)
-    y = bank_feats_cpu.to(torch.float32)
-    # 归一化假设已完成；内积作为余弦相似度
-    sims = q @ y.T                                   # [M, Ns]
-    vals, idx = torch.topk(sims, k=min(K, y.size(0)), dim=1)
-    nbr_labels = bank_labels_cpu[idx]                # [M, K]
-    # 多数票
-    preds = []
-    for r in range(nbr_labels.size(0)):
-        labs, cnts = torch.unique(nbr_labels[r], return_counts=True)
-        preds.append(labs[torch.argmax(cnts)])
-    preds = torch.stack(preds).long()
-    agree = (preds == y_hat_sel_cpu)
-    good_sim = (vals[:, 0] >= sim_th)
-    keep_mask = (agree & good_sim).nonzero(as_tuple=True)[0]
-    return keep_mask
-
-# ========== 5) 置信度阈值调度（保留原逻辑） ==========
+# ========== 4) 置信度阈值调度（保留原逻辑） ==========
 def schedule_conf(epoch, start_ep=5, end_ep=20, hi=0.95, lo=0.90):
     if epoch <= start_ep: return hi
     if epoch >= end_ep:   return lo
     t = (epoch - start_ep) / max(1, (end_ep - start_ep))
     return float(hi + t*(lo - hi))
 
-# ========== 6) 一站式：先伪标签 → 再 KMeans → 再筛选（+ 可选 kNN 校验） ==========
+# ========== 5) 一站式：返回 (pseudo_x, pseudo_y, pseudo_w, stats) ==========
 @torch.no_grad()
 def pseudo_then_kmeans_select(
     model, target_loader, device, num_classes,
     epoch,
     # 伪标签/softmax
     T=1.0,
-    # 调度后的置信度阈值
+    # 置信度阈值调度 (start_ep, end_ep, hi, lo)
     conf_sched=(5, 20, 0.95, 0.90),
     # 聚类筛选阈值
     tau_pur=0.80, dist_q=0.80, min_cluster_size=20,
     per_class_cap=None,
-    # 可选：kNN 二次校验
-    bank_feats_cpu=None, bank_labels_cpu=None, knn_K=5, knn_sim_th=0.20
+    # 是否启用基于“靠中心程度”和“簇纯度”的权重
+    use_cluster_weight=True,
 ):
-    # 1) 全量提取（含 margins，避免二次前向）
-    feats_all, yhat_all, pmax_all, margins_all = extract_all_target_feats_and_pseudo(
+    """
+    返回:
+      pseudo_x: [M, ...]  通过筛选的目标域样本（CPU Tensor）
+      pseudo_y: [M]       伪标签 (long, CPU)
+      pseudo_w: [M]       每样本权重 (float, CPU, in [0,1])
+      stats:    dict      统计信息
+    依赖:
+      - extract_all_target_feats_and_pseudo(model, loader, device, T, normalize=True)
+        应返回: xs_all, feats_all, yhat_all, pmax_all  (均在 CPU，xs_all 是原始输入)
+    """
+    # 1) 全量提取（含原始输入，避免二次前向）
+    xs_all, feats_all, yhat_all, pmax_all = extract_all_target_feats_and_pseudo(
         model, target_loader, device, T=T, normalize=True
     )
 
@@ -240,21 +228,48 @@ def pseudo_then_kmeans_select(
     # 4) 样本级筛选（簇-类一致 + 纯度 + 距离 + 置信度）
     keep_idx, dist_all, stat_cluster = select_by_cluster_rules(
         feats_all, yhat_all, pmax_all, z, centers, cluster_major, purity, sizes,
-        num_classes, tau_pur=tau_pur, conf_th=conf_th, dist_quantile=dist_q,
+        num_classes,
+        tau_pur=tau_pur, conf_th=conf_th, dist_quantile=dist_q,
         min_cluster_size=min_cluster_size, per_class_cap=per_class_cap
     )
 
-    # 5) 可选：kNN 二次校验（源库）
-    if bank_feats_cpu is not None and bank_labels_cpu is not None and len(keep_idx) > 0:
-        mask2 = knn_second_pass(
-            feats_all[keep_idx], yhat_all[keep_idx],
-            bank_feats_cpu, bank_labels_cpu,
-            K=knn_K, sim_th=knn_sim_th
-        )
-        keep_idx = keep_idx[mask2]
+    # 5) 组装输出
+    if keep_idx.numel() == 0:
+        pseudo_x = torch.empty(0)
+        pseudo_y = torch.empty(0, dtype=torch.long)
+        pseudo_w = torch.empty(0)
+    else:
+        # 直接索引出样本与伪标签（均在 CPU）
+        pseudo_x = xs_all[keep_idx]
+        pseudo_y = yhat_all[keep_idx]
 
-    coverage = float(len(keep_idx) / max(1, feats_all.size(0)))
-    log = {
+        # ---- 样本权重：置信度 × 簇纯度 × （越靠近中心越大）----
+        w_conf = pmax_all[keep_idx].clone().to(torch.float32)
+
+        if use_cluster_weight:
+            d_keep = dist_all[keep_idx].clone()
+            z_keep = z[keep_idx]
+
+            # 在各自簇内做 min-max 归一化得到“靠中心程度”权重
+            w_center = torch.zeros_like(d_keep, dtype=torch.float32)
+            for k in range(num_classes):
+                idx_k = (z_keep == k).nonzero(as_tuple=True)[0]
+                if idx_k.numel() == 0:
+                    continue
+                dk = d_keep[idx_k]
+                dmin, dmax = dk.min(), dk.max()
+                if (dmax - dmin) < 1e-12:
+                    w_center[idx_k] = 1.0
+                else:
+                    w_center[idx_k] = 1.0 - (dk - dmin) / (dmax - dmin)  # 越近中心→越大
+
+            w_purity = purity[z_keep].to(torch.float32)
+            pseudo_w = (w_conf * w_center * w_purity).clamp_(0.0, 1.0)
+        else:
+            pseudo_w = w_conf
+
+    coverage = float(keep_idx.numel() / max(1, feats_all.size(0)))
+    stats = {
         "cov_after_cluster": coverage,
         "conf_th": conf_th,
         "purity_mean": stat_cluster["purity_mean"],
@@ -262,11 +277,8 @@ def pseudo_then_kmeans_select(
         "num_clusters_valid": stat_cluster["num_clusters_valid"],
         "median_pmax_all": float(pmax_all.median().item()),
         "mean_pmax_all": float(pmax_all.mean().item()),
+        "num_selected": int(keep_idx.numel()),
     }
 
-    # 直接用 yhat_all 和 margins_all 构造返回（避免二次前向）
-    y_keep = yhat_all[keep_idx]          # 伪标签
-    w_keep = margins_all[keep_idx]       # 质量权重(top1-top2)
-
-    return keep_idx, y_keep, w_keep, log
+    return pseudo_x, pseudo_y, pseudo_w, stats
 

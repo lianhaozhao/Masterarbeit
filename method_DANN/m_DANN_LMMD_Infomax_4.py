@@ -264,24 +264,16 @@ def train_dann_infomax_lmmd(model,
                             conf_sched=(5, 20, 0.95, 0.90),    # 置信度阈值从 0.95 平滑降到 0.90
                             tau_pur=0.80, dist_q=0.80, min_cluster_size=15,
                             per_class_cap=None,                # 需要类平衡时，例如每类最多 500：per_class_cap=500
-                            bank_feats_cpu=None, bank_labels_cpu=None,   # 开启 kNN 校验时传入两个库
-                            knn_K=5, knn_sim_th=0.25
                         )
             kept = stats["num_clusters_valid"]
             cov = stats["cov_after_cluster"]
-            if kept > 0:
+            zahl = stats["num_selected"]
+            if zahl > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
 
         # 2) Gated LMMD weights
-        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=lmmd_start_epoch)
-        # Quality q: Linearly normalize margin (0.05-0.5) and couple it with coverage (concave, to avoid high coverage but poor quality)
-        def _lin(x, lo, hi):
-            return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
-        q_margin = _lin(margin_mean, 0.05, 0.50)
-        q_cov = math.sqrt(max(0.0, cov))  # concave
-        q = q_margin * q_cov
-        lambda_mmd_eff = lambda_mmd_base * q
+        lambda_mmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=3e-1, start_epoch=lmmd_start_epoch)
 
         # 3) epoch training
         model.train()
@@ -389,7 +381,7 @@ def train_dann_infomax_lmmd(model,
 
         print(f"[Epoch {epoch+1}] Total loss:{avg_tot:.4f} | Avg cls loss:{avg_cls:.4f} | avg Dom loss:{avg_dom:.4f} "
               f"| avg IM loss:{avg_im:.4f} | avg LMMD loss:{avg_mmd:.4f} | DomAcc:{dom_acc:.4f} | "
-              f"cov:{cov:.2%}  "
+              f"cov:{cov:.2%} | zahl:{zahl:.2%} "
               f"λ_GRL:{model.lambda_:.4f} | λ_mmd_eff:{lambda_mmd_eff:.4f}")
 
         gap_hist.append(gap)
