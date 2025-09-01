@@ -180,12 +180,20 @@ def _pairwise_sq_dists(a, b):
     b2 = (b*b).sum(dim=1, keepdim=True).t()   # [1,n]
     return a2 + b2 - 2 * (a @ b.t())
 
+# def _mk_kernel(a, b, gammas):
+#     d2 = _pairwise_sq_dists(a, b).clamp_min(0)
+#     k = 0.0
+#     for g in gammas:
+#         k = k + torch.exp(-g * d2)
+#     return k
 def _mk_kernel(a, b, gammas):
     d2 = _pairwise_sq_dists(a, b).clamp_min(0)
     k = 0.0
+    M = max(1, len(gammas))
     for g in gammas:
-        k = k + torch.exp(-g * d2)
-    return k
+        k = k + torch.exp(-float(g) * d2)
+    return k / M  # ← 平均而不是求和
+
 
 def _weighted_mean_kernel(K, w_row, w_col):
     # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))

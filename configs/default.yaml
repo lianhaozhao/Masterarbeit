@@ -13,8 +13,8 @@ baseline_2:
   learning_rate: 0.0002698732287957219
   weight_decay: 0.00025692939517131546
   num_layers: 7
-  kernel_size: 8
-  start_channels: 7
+  kernel_size: 7
+  start_channels: 8
   num_epochs: 40
   early_stopping_patience: 3
 
@@ -30,10 +30,10 @@ DANN_LMMD_INFO:
 
 DANN_LMMD_INFO_2:
   batch_size: 64
-  learning_rate: 9.000797694780627e-05
-  weight_decay: 0.00046759534090420386
+  learning_rate: 0.0001792475323307908
+  weight_decay: 0.00032353088925353776
   num_layers: 5
-  kernel_size: 7
+  kernel_size: 31
   start_channels: 8
   num_epochs: 40
   early_stopping_patience: 3

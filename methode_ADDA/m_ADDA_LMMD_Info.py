@@ -20,8 +20,7 @@ def set_seed(seed=42):
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
     if epoch < start_epoch: return 0.0
     p = (epoch-start_epoch) / max(1, (num_epochs-1-start_epoch))
-    s = 1/(1+math.exp(-10*(p-0.5)))
-    return float(max_lambda*s)
+    return (2.0 / (1.0 + np.exp(-10 * p)) - 1.0) * max_lambda
 
 # ------------------ InfoMax (target domain) ------------------
 @torch.no_grad()
