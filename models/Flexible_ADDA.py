@@ -4,7 +4,7 @@ from models.Flexible_CNN import Flexible_CNN_FeatureExtractor, Flexible_CNN_Clas
 
 class Flexible_ADDA(nn.Module):
     def __init__(self, num_layers=2, start_channels=8, kernel_size=3,
-                 cnn_act='leakrelu', num_classes=10, lambda_=1.0):
+                 cnn_act='leakrelu', num_classes=10):
         super().__init__()
         self.feature_extractor = Flexible_CNN_FeatureExtractor(num_layers, start_channels, kernel_size, cnn_act)
         feature_dim = self.feature_extractor.feature_dim
