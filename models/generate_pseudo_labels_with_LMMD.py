@@ -96,7 +96,7 @@ def extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0, nor
     return xs, feats, y_hat, p_max
 # ========== 1) 提取“全部目标样本”的特征 + 伪标签  ==========
 @torch.no_grad()
-def adda_extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0,  keep_inputs=True):
+def adda_extract_all_target_feats_and_pseudo(model, pseudo_loader, device, T=2.0, normalize=True, keep_inputs=True):
     """
     对 target_loader 中的所有样本：提取 features、伪标签 y_hat、最大置信度 p_max，
     并（可选）缓存原始输入 x（CPU），以便后续按索引切出 pseudo_x。
@@ -104,7 +104,7 @@ def adda_extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0
     """
     model.eval()
     xs, feats, y_hat, p_max = [], [], [], []
-    for batch in target_loader:
+    for batch in pseudo_loader:
         x = batch[0] if isinstance(batch, (tuple, list)) else batch
         x = x.to(device, non_blocking=True)
         logits, _, feat = model(x)
@@ -112,6 +112,8 @@ def adda_extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0
         prob = F.softmax(logits / T, dim=1)
         pm, yp = prob.max(dim=1)
 
+        if normalize:
+            feat = F.normalize(feat, dim=1)
 
         feats.append(feat.detach().cpu())
         y_hat.append(yp.detach().cpu())
@@ -314,7 +316,7 @@ def pseudo_then_kmeans_select(
 # ========== 5) 一站式：返回 (pseudo_x, pseudo_y, pseudo_w, stats) ==========
 @torch.no_grad()
 def adda_pseudo_then_kmeans_select(
-    model, target_loader, device, num_classes,
+    model, pseudo_loader, device, num_classes,
     epoch,
     # 伪标签/softmax
     T=1.0,
@@ -338,7 +340,7 @@ def adda_pseudo_then_kmeans_select(
     """
     # 1) 全量提取（含原始输入，避免二次前向）
     xs_all, feats_all, yhat_all, pmax_all = adda_extract_all_target_feats_and_pseudo(
-        model, target_loader, device, T=T
+        model, pseudo_loader, device, T=T, normalize=True
     )
 
     # 2) 全局 KMeans(K=C)
