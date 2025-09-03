@@ -10,6 +10,7 @@ from models.Flexible_DANN_pseudo_MMD import Flexible_DANN
 from PKLDataset import PKLDataset
 from models.get_no_label_dataloader import get_target_loader
 from utils.general_train_and_test import general_test_model
+from models.generate_pseudo_labels_with_LMMD import pseudo_then_kmeans_select
 
 def set_seed(seed=42):
     torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
@@ -24,14 +25,13 @@ def get_dataloaders(source_path, target_path, batch_size):
 # DANN Lambda Scheduling (GRL only)
 def dann_lambda(epoch, num_epochs, max_lambda=0.35):
     p = epoch / max(1, num_epochs-1)
-    return (2.0 / (1.0 + np.exp(-7 * p)) - 1.0) * max_lambda
+    return (2.0 / (1.0 + np.exp(-5 * p)) - 1.0) * max_lambda
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
 def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
     if epoch < start_epoch: return 0.0
     p = (epoch-start_epoch) / max(1, (num_epochs-1-start_epoch))
-    s = 1/(1+math.exp(-10*(p-0.5)))
-    return float(max_lambda*s)
+    return (2.0 / (1.0 + np.exp(-7 * p)) - 1.0) * max_lambda
 
 # ------------------ InfoMax (target domain) ------------------
 @torch.no_grad()
@@ -86,151 +86,96 @@ def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
     h_marg = entropy_marginal(p)  # Schätzung der marginalen Entropie
     return h_cond - marg_weight * h_marg, h_cond.detach(), h_marg.detach()
 
-# 伪标签 + 统计
-@torch.no_grad()
-def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1.0):
+
+def _weighted_mean(X, w=None, eps=1e-8):
+    # X: [n,d], w: [n]
+    if w is None:
+        return X.mean(dim=0, keepdim=True)  # [1,d]
+    w = w.view(-1, 1)
+    s = torch.clamp(w.sum(), min=eps)
+    return (w * X).sum(dim=0, keepdim=True) / s
+
+def _weighted_cov(X, w=None, eps=1e-8, unbiased=False):
     """
-        Use the current model to perform "offline pseudo-annotation" on unlabeled data in the target domain, and calculate coverage and average quality.
-
-        This function calculates the classification probability (with an optional temperature T) for each target domain sample.
-        Only samples with a top-1 probability conf >= threshold are retained as pseudo-labeled samples.
-        The difference in the (top-1 - top-2) probability is used as a "sample quality weight" (margin),
-        to facilitate downweighting of uncertain samples in subsequent class-conditional alignment (such as LMMD) or distillation.
-
-        This function is executed with `torch.no_grad()` + `model.eval()`, and no gradients or parameter updates are generated.
-
-        Parameters
-        ----------
-        model : torch.nn.Module
-        A trained (or training) classification model. Its `forward(x, grl=False)` should return
-        `(logits, domain_logits, features)`. This function only uses `logits`.
-        Note: GRL is disabled here with `grl=False` The reverse effect of `` (for semantic clarity only; no reverse effect with `no_grad`).
-
-        target_loader : torch.utils.data.DataLoader
-        DataLoader for the target domain's unlabeled data. `__getitem__` should return `x` or `(x, ...)`,
-        where only the first element is used as input.
-
-        device : torch.device
-        The inference device (e.g., `torch.device("cuda")` or `torch.device("cpu")`).
-
-        threshold : float, default=0.95
-        The pseudo-label retention threshold: retain samples if their top-1 probability `conf` satisfies `conf >= threshold`.
-
-        A higher threshold generally results in lower coverage (retention fraction) but higher quality.
-
-        T : float, default=1.0
-        Softmax temperature. Logits are divided by T before softmaxing:
-
-        - T > 1: probabilities are flatter (decreasing confidence, generally lower coverage);
-
-        - T < 1: Probability is more "sharp" (increasing confidence generally leads to higher coverage).
-
-        Returns
-        ------
-        x_cat : torch.Tensor
-        The concatenated tensor of target samples that pass the threshold, located in **CPU**.
-        y_cat : torch.Tensor
-        The corresponding "hard pseudo-label" (`argmax`), dtype `torch.long`, located in **CPU**.
-        w_cat : torch.Tensor
-        Sample-level weight (quality), using `margin = p_top1 - p_top2`, located in **CPU**.
-        stats : Dict[str, float]
-        Statistics dictionary, containing:
-        - "kept" : int, the number of samples `N_keep` retained in this round;
-        - "total" : int, the total number of target domain samples;
-        - "coverage" : float, coverage = `N_keep / total`;
-        - "margin_mean" : float, the average margin of the retained samples, a measure of the overall pseudo-label quality.
-
+    返回加权协方差矩阵 Σ: [d,d]
+    X: [n,d], w: [n]
     """
-
-    model.eval()
-    xs, ys, ws = [], [], []
-    margins = []
-    total = 0
-    for batch in target_loader:
-        x = batch[0] if isinstance(batch, (tuple, list)) else batch
-        total += x.size(0)
-        x_dev = x.to(device)
-        logits, _, _ = model(x_dev)
-        prob = F.softmax(logits / T, dim=1)
-        top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
-        conf, _ = torch.max(prob, dim=1)  # [B]
-        margin = top2[:, 0] - top2[:, 1]  # [B]
-        keep = conf >= threshold
-        if keep.any():
-            xs.append(x_dev[keep].detach().cpu())
-            ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
-            ws.append(margin[keep].detach().cpu())
-            margins.append(margin[keep].detach().cpu())
-    if len(xs) == 0:
-        x_cat = torch.empty(0)
-        y_cat = torch.empty(0, dtype=torch.long)
-        w_cat = torch.empty(0)
-        cov = 0.0
-        margin_mean = 0.0
+    n, d = X.shape
+    if n <= 1:
+        return X.new_zeros(d, d)
+    if w is None:
+        mu = X.mean(dim=0, keepdim=True)                    # [1,d]
+        Xc = X - mu
+        # 无权：等价于 (Xc^T Xc) / (n-1)（若 unbiased）
+        denom = (n - 1 if unbiased and n > 1 else n)
+        return (Xc.t() @ Xc) / max(1.0, float(denom))
     else:
-        x_cat = torch.cat(xs, dim=0)
-        y_cat = torch.cat(ys, dim=0)
-        w_cat = torch.cat(ws, dim=0)
-        cov = float(x_cat.size(0)) / max(1, total)
-        margin_mean = float(torch.cat(margins).mean())
-    return x_cat, y_cat, w_cat, {"kept": int(x_cat.size(0)), "total": int(total),
-                                 "coverage": cov, "margin_mean": margin_mean}
+        w = w.view(-1, 1)                                   # [n,1]
+        s = torch.clamp(w.sum(), min=eps)
+        mu = (w * X).sum(dim=0, keepdim=True) / s           # [1,d]
+        Xc = X - mu
+        # 加权协方差：Xc^T diag(w) Xc / s   （常用定义；如需无偏修正可加权修正项）
+        Sigma = (Xc.t() @ (w * Xc)) / s
+        return Sigma
 
-#  Weighted Class Conditional MMD (Multi-core RBF)
-def _pairwise_sq_dists(a, b):
-    # a: [m,d], b: [n,d]
-    a2 = (a*a).sum(dim=1, keepdim=True)       # [m,1]
-    b2 = (b*b).sum(dim=1, keepdim=True).t()   # [1,n]
-    return a2 + b2 - 2 * (a @ b.t())
+def coral_loss_from_cov(S_s, S_t, norm='fro', eps=1e-12):
+    """
+    标准 CORAL: || S_s - S_t ||_F^2
+    可选归一化，避免维度/尺度差异影响权重。
+    """
+    D = S_s - S_t
+    if norm == 'fro':
+        return (D * D).sum()
+    elif norm == 'trace':
+        # trace 归一化：除以 d^2（或 4 d^2）等，常见实现里会做一个常数缩放
+        d = S_s.size(0)
+        return (D * D).sum() / (d * d + eps)
+    else:
+        return (D * D).sum()
 
-# def _mk_kernel(a, b, gammas):
-#     d2 = _pairwise_sq_dists(a, b).clamp_min(0)
-#     k = 0.0
-#     for g in gammas:
-#         k = k + torch.exp(-g * d2)
-#     return k
-def _mk_kernel(a, b, gammas):
-    d2 = _pairwise_sq_dists(a, b).clamp_min(0)
-    k = 0.0
-    M = max(1, len(gammas))
-    for g in gammas:
-        k = k + torch.exp(-float(g) * d2)
-    return k / M  # ← 平均而不是求和
-
-
-def _weighted_mean_kernel(K, w_row, w_col):
-    # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))
-    num = (w_row.view(1,-1) @ K @ w_col.view(-1,1)).squeeze()
-    den = (w_row.sum() * w_col.sum()).clamp_min(1e-8)
-    return num / den
-
-def mmd2_weighted(a, b, w_a=None, w_b=None, gammas=(0.5,1,2,4,8)):
-    # MMD^2 = E_aa k + E_bb k - 2 E_ab k  （weight）
-    if w_a is None: w_a = torch.ones(a.size(0), device=a.device)
-    if w_b is None: w_b = torch.ones(b.size(0), device=b.device)
-    Kaa = _mk_kernel(a, a, gammas)
-    Kbb = _mk_kernel(b, b, gammas)
-    Kab = _mk_kernel(a, b, gammas)
-    e_aa = _weighted_mean_kernel(Kaa, w_a, w_a)
-    e_bb = _weighted_mean_kernel(Kbb, w_b, w_b)
-    e_ab = _weighted_mean_kernel(Kab, w_a, w_b)
-    return (e_aa + e_bb - 2*e_ab).clamp_min(0.0)
-
-def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
-                                  num_classes, gammas=(0.5,1,2,4,8),
-                                  min_count_per_class=2):
+def classwise_coral_weighted(
+    feat_src, y_src, feat_tgt, y_tgt, w_tgt,
+    num_classes,
+    min_count_per_class=2,
+    add_mean_align=True,         # 是否额外加入类均值对齐项
+    mean_weight=1.0,             # 均值项系数
+    cov_norm='trace',            # 'fro' 或 'trace'
+    unbiased_cov=False           # 是否对无权情形使用 n-1
+):
+    """
+    类条件 CORAL：对每个类 c，对齐源/目标的协方差（和可选的均值）。
+    外层以 min(ns, nt) 对各类加权平均。
+    目标端使用 w_tgt 作为样本权重。
+    """
     total = feat_src.new_tensor(0.0)
     wsum = 0.0
+
     for c in range(num_classes):
         ms = (y_src == c)
         mt = (y_tgt == c)
         ns, nt = int(ms.sum()), int(mt.sum())
         if ns >= min_count_per_class and nt >= min_count_per_class:
-            w_c = w_tgt[mt]
-            mmd_c = mmd2_weighted(feat_src[ms], feat_tgt[mt], None, w_c, gammas)
+            Xs = feat_src[ms]             # [ns,d]
+            Xt = feat_tgt[mt]             # [nt,d]
+            wt = w_tgt[mt]                # [nt]
+
+            # 协方差（源：无权；目标：带权）
+            Cs = _weighted_cov(Xs, w=None, unbiased=unbiased_cov)
+            Ct = _weighted_cov(Xt, w=wt,   unbiased=False)
+
+            loss_c = coral_loss_from_cov(Cs, Ct, norm=cov_norm)
+
+            if add_mean_align:
+                mus = _weighted_mean(Xs, w=None)            # [1,d]
+                mut = _weighted_mean(Xt, w=wt)              # [1,d]
+                loss_mean = F.mse_loss(mus, mut, reduction='sum')  # 或 'mean' 再调系数
+                loss_c = loss_c + mean_weight * loss_mean
+
+            # 类权重
             w = float(min(ns, nt))
-            total = total + mmd_c * w
+            total = total + loss_c * w
             wsum += w
+
     return total / wsum if wsum > 0 else total
 
 # Training
@@ -238,16 +183,14 @@ def train_dann_infomax_lmmd(model,
                             source_loader, target_loader,
                             optimizer, criterion_cls, criterion_domain,
                             device, num_epochs=20, num_classes=10,
-                            pseudo_thresh=0.95,
-                            mmd_gammas=(0.5,1,2,4,8),
                             scheduler=None, batch_size=16,
                             # InfoMax
                             im_T=1.0, im_weight=0.5, im_marg_w=1.0,
                             # Gating
-                            lmmd_start_epoch=5,lmmd_t=1
+                            lmmd_start_epoch=5,
                             ):
     # Hyperparameters related to early stopping
-    W = 5
+    W = 4
     GAP_TH = 0.05  # DomAcc distance threshold of 0.5 (the smaller the better alignment)
     PATIENCE = 3  # Stop after several rounds without improvement
 
@@ -267,25 +210,24 @@ def train_dann_infomax_lmmd(model,
         pseudo_w = torch.empty(0)
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
-            pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, target_loader, device, threshold=pseudo_thresh, T=lmmd_t
+            pseudo_x, pseudo_y, pseudo_w, stats = pseudo_then_kmeans_select(
+                model, target_loader, device, num_classes,
+                epoch=epoch,
+                T=1.0,
+                conf_sched=(20, 30, 0.95, 0.90),  # 置信度阈值从 0.95 平滑降到 0.90
+                tau_pur=0.80, dist_q=0.80, min_cluster_size=10,
+                per_class_cap=None,  # 需要类平衡时，例如每类最多 500：per_class_cap=500
             )
-            kept, total = stats["kept"], stats["total"]
-            cov, margin_mean = stats["coverage"], stats["margin_mean"]
-            if kept > 0:
+            kept = stats["num_clusters_valid"]
+            cov = stats["cov_after_cluster"]
+            zahl = stats["num_selected"]
+            if zahl > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
 
         # 2) Gated LMMD weights
-        lambda_mmd_base = mmd_lambda(epoch, num_epochs, max_lambda=12e-2, start_epoch=lmmd_start_epoch)
-        # Quality q: Linearly normalize margin (0.05-0.5) and couple it with coverage (concave, to avoid high coverage but poor quality)
-        def _lin(x, lo, hi):
-            return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
-        q_margin = _lin(margin_mean, 0.05, 0.50)
-        q_cov = math.sqrt(max(0.0, cov))  # concave
-        q = q_margin * q_cov
-        lambda_mmd_eff = lambda_mmd_base * q
-        # lambda_mmd_eff = max(0.015,lambda_mmd_base * q)
+        lambda_coral_eff = mmd_lambda(epoch, num_epochs, max_lambda=25e-2, start_epoch=lmmd_start_epoch)
+
 
         # 3) epoch training
         model.train()
@@ -296,7 +238,7 @@ def train_dann_infomax_lmmd(model,
         len_pl = len(pl_loader) if pl_loader is not None else 0
         num_iters = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
 
-        cls_loss_sum = dom_loss_sum = mmd_loss_sum = im_loss_sum = 0.0
+        cls_loss_sum = dom_loss_sum = coral_loss_sum = im_loss_sum = 0.0
         tot_loss_sum = 0.0
         tot_target_samples=tot_cls_samples = tot_dom_samples = 0
         dom_correct_src = dom_correct_tgt = 0
@@ -346,19 +288,24 @@ def train_dann_infomax_lmmd(model,
             loss_im = im_weight * loss_im
 
             # 4) Class-conditional LMMD (weighted, quality-gated)
-            feat_src_n = F.normalize(feat_src, dim=1)
-            if tgt_pl_x is not None and lambda_mmd_eff > 0:
-                _, _, feat_tgt_pl = model(tgt_pl_x, grl=False)
-                feat_tgt_pl_n = F.normalize(feat_tgt_pl, dim=1)
-                loss_lmmd = classwise_mmd_biased_weighted(
-                    feat_src_n, src_y, feat_tgt_pl_n, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=3
-                )
-                loss_lmmd = lambda_mmd_eff * loss_lmmd
-            else:
-                loss_lmmd = feat_src_n.new_tensor(0.0)
 
-            loss = loss_cls + loss_dom + loss_im + loss_lmmd
+            if tgt_pl_x is not None and lambda_coral_eff > 0:
+                was_training = model.training
+                model.eval()
+                with torch.set_grad_enabled(True):
+                    _, _, feat_src_lmmd = model(src_x, grl=False)
+                    _, _, feat_tgt_lmmd = model(tgt_pl_x, grl=False)
+                model.train(was_training)
+
+                loss_coral = classwise_coral_weighted(
+                    feat_src_lmmd, src_y, feat_tgt_lmmd, tgt_pl_y, tgt_pl_w,
+                    num_classes=num_classes, min_count_per_class=3
+                )
+                loss_coral = lambda_coral_eff * loss_coral
+            else:
+                loss_coral = feat_src.new_tensor(0.0)
+
+            loss = loss_cls + loss_dom + loss_im + loss_coral
 
             optimizer.zero_grad()
             loss.backward()
@@ -367,8 +314,8 @@ def train_dann_infomax_lmmd(model,
             # ------ Statistics ------
             cls_loss_sum  += loss_cls.item() * src_x.size(0)
             dom_loss_sum  += loss_dom.item() * (src_x.size(0) + tgt_x.size(0))
-            im_loss_sum   += loss_im.item()  * (tgt_x.size(0))
-            mmd_loss_sum  += loss_lmmd.item() * src_x.size(0)
+            im_loss_sum += loss_im.item() * (tgt_x.size(0))
+            coral_loss_sum  += loss_coral.item() * src_x.size(0)
             tot_loss_sum  += loss.item()     * (src_x.size(0) + tgt_x.size(0))
             tot_cls_samples += src_x.size(0)
             tot_dom_samples += (src_x.size(0) + tgt_x.size(0))
@@ -383,7 +330,7 @@ def train_dann_infomax_lmmd(model,
         avg_cls = cls_loss_sum / max(1, tot_cls_samples)
         avg_dom = dom_loss_sum / max(1, tot_dom_samples)
         avg_im  = im_loss_sum  / max(1, tot_target_samples)
-        avg_mmd = mmd_loss_sum / max(1, tot_cls_samples)
+        avg_coral = coral_loss_sum / max(1, tot_cls_samples)
         avg_tot = tot_loss_sum / max(1, tot_dom_samples)
         acc_src = dom_correct_src / max(1, dom_total_src)
         acc_tgt = dom_correct_tgt / max(1, dom_total_tgt)
@@ -392,13 +339,13 @@ def train_dann_infomax_lmmd(model,
         if scheduler is not None: scheduler.step()
 
         print(f"[Epoch {epoch+1}] Total loss:{avg_tot:.4f} | Avg cls loss:{avg_cls:.4f} | avg Dom loss:{avg_dom:.4f} "
-              f"| avg IM loss:{avg_im:.4f} | avg LMMD loss:{avg_mmd:.4f} | DomAcc:{dom_acc:.4f} | "
-              f"cov:{cov:.2%} margin:{margin_mean:.3f} | "
-              f"λ_GRL:{model.lambda_:.4f} | λ_mmd_eff:{lambda_mmd_eff:.4f}")
+              f"| avg IM loss:{avg_im:.4f} | avg coral loss:{avg_coral:.4f} | DomAcc:{dom_acc:.4f} | "
+              f"cov:{cov:.2%} | "
+              f"λ_GRL:{model.lambda_:.4f} | λ_coral_eff:{lambda_coral_eff:.4f}")
 
         gap_hist.append(gap)
 
-        score =gap  + avg_im
+        score = gap  + avg_im
 
         # Record the optimal model
         if epoch > 15:
@@ -422,33 +369,29 @@ def train_dann_infomax_lmmd(model,
                     # Prioritize backloading the "plateau optimal"; otherwise, backloading the "global optimal"
                     if plateau_best_state is not None:
                         model.load_state_dict(plateau_best_state)
-                        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
                     elif best_state is not None:
                         model.load_state_dict(best_state)
-                        # torch.save(best_state, "./model/185_best.pth")
                     break
             else:
 
                 patience = 0
         # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/target/test/HC_T191_RP.txt'
+        # target_test_path = '../datasets/target/test/HC_T194_RP.txt'
         # test_dataset = PKLDataset(target_test_path)
         # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         # general_test_model(model, criterion_cls, test_loader, device)
 
     if plateau_best_state is not None:
         model.load_state_dict(plateau_best_state)
-        # torch.save(plateau_best_state, "./model/185_plateau_best.pth")
     elif best_state is not None:
         model.load_state_dict(best_state)
-        # torch.save(best_state, "./model/185_best.pth")
 
     return model
 
 
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
-        cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
+        cfg = yaml.safe_load(f)['baseline']
     bs = cfg['batch_size']
     lr = cfg['learning_rate']
     wd = cfg['weight_decay']
@@ -457,7 +400,7 @@ if __name__ == "__main__":
     sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
-    files = [188]
+    files = [194]
     # files = [185, 188, 191, 194, 197]
     for file in files:
 
@@ -479,7 +422,7 @@ if __name__ == "__main__":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
             c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
 
-            print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
+            print("[INFO] Starting DANN + InfoMax + (quality-gated) coral ...")
             model = train_dann_infomax_lmmd(
                 model, src_loader, tgt_loader,
                 optimizer, c_cls, c_dom, device,

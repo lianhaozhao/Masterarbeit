@@ -94,8 +94,37 @@ def extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0, nor
     p_max = torch.cat(p_max, dim=0)             # [N],    CPU
     xs = torch.cat(xs, dim=0) if keep_inputs else None
     return xs, feats, y_hat, p_max
+# ========== 1) 提取“全部目标样本”的特征 + 伪标签  ==========
+@torch.no_grad()
+def adda_extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0,  keep_inputs=True):
+    """
+    对 target_loader 中的所有样本：提取 features、伪标签 y_hat、最大置信度 p_max，
+    并（可选）缓存原始输入 x（CPU），以便后续按索引切出 pseudo_x。
+    注意：这是对“全部样本”做的（不带阈值筛）。
+    """
+    model.eval()
+    xs, feats, y_hat, p_max = [], [], [], []
+    for batch in target_loader:
+        x = batch[0] if isinstance(batch, (tuple, list)) else batch
+        x = x.to(device, non_blocking=True)
+        logits, _, feat = model(x)
 
-# ========== 2) 全局 KMeans + 簇-类统计（修正 dtype/contiguous） ==========
+        prob = F.softmax(logits / T, dim=1)
+        pm, yp = prob.max(dim=1)
+
+
+        feats.append(feat.detach().cpu())
+        y_hat.append(yp.detach().cpu())
+        p_max.append(pm.detach().cpu())
+        if keep_inputs:
+            xs.append(x.detach().cpu())
+
+    feats = torch.cat(feats, dim=0)             # [N, D], CPU
+    y_hat = torch.cat(y_hat, dim=0).long()      # [N],    CPU
+    p_max = torch.cat(p_max, dim=0)             # [N],    CPU
+    xs = torch.cat(xs, dim=0) if keep_inputs else None
+    return xs, feats, y_hat, p_max
+# ========== 2) 全局 KMeans + 簇-类统计 ==========
 def kmeans_global(feats_cpu, num_classes, seed=0, n_init=10):
     # 确保 KMeans 输入是 float32 + contiguous
     x_np = feats_cpu.contiguous().to(torch.float32).numpy()
@@ -282,3 +311,96 @@ def pseudo_then_kmeans_select(
 
     return pseudo_x, pseudo_y, pseudo_w, stats
 
+# ========== 5) 一站式：返回 (pseudo_x, pseudo_y, pseudo_w, stats) ==========
+@torch.no_grad()
+def adda_pseudo_then_kmeans_select(
+    model, target_loader, device, num_classes,
+    epoch,
+    # 伪标签/softmax
+    T=1.0,
+    # 置信度阈值调度 (start_ep, end_ep, hi, lo)
+    conf_sched=(5, 20, 0.95, 0.90),
+    # 聚类筛选阈值
+    tau_pur=0.80, dist_q=0.80, min_cluster_size=20,
+    per_class_cap=None,
+    # 是否启用基于“靠中心程度”和“簇纯度”的权重
+    use_cluster_weight=True,
+):
+    """
+    返回:
+      pseudo_x: [M, ...]  通过筛选的目标域样本（CPU Tensor）
+      pseudo_y: [M]       伪标签 (long, CPU)
+      pseudo_w: [M]       每样本权重 (float, CPU, in [0,1])
+      stats:    dict      统计信息
+    依赖:
+      - extract_all_target_feats_and_pseudo(model, loader, device, T)
+        应返回: xs_all, feats_all, yhat_all, pmax_all  (均在 CPU，xs_all 是原始输入)
+    """
+    # 1) 全量提取（含原始输入，避免二次前向）
+    xs_all, feats_all, yhat_all, pmax_all = adda_extract_all_target_feats_and_pseudo(
+        model, target_loader, device, T=T
+    )
+
+    # 2) 全局 KMeans(K=C)
+    z, centers = kmeans_global(feats_all, num_classes, seed=0, n_init=10)
+    cluster_major, purity, sizes = cluster_major_and_purity(yhat_all, z, num_classes)
+
+    # 3) 动态置信度阈值
+    conf_th = schedule_conf(epoch, *conf_sched)
+
+    # 4) 样本级筛选（簇-类一致 + 纯度 + 距离 + 置信度）
+    keep_idx, dist_all, stat_cluster = select_by_cluster_rules(
+        feats_all, yhat_all, pmax_all, z, centers, cluster_major, purity, sizes,
+        num_classes,
+        tau_pur=tau_pur, conf_th=conf_th, dist_quantile=dist_q,
+        min_cluster_size=min_cluster_size, per_class_cap=per_class_cap
+    )
+
+    # 5) 组装输出
+    if keep_idx.numel() == 0:
+        pseudo_x = torch.empty(0)
+        pseudo_y = torch.empty(0, dtype=torch.long)
+        pseudo_w = torch.empty(0)
+    else:
+        # 直接索引出样本与伪标签（均在 CPU）
+        pseudo_x = xs_all[keep_idx]
+        pseudo_y = yhat_all[keep_idx]
+
+        # ---- 样本权重：置信度 × 簇纯度 × （越靠近中心越大）----
+        w_conf = pmax_all[keep_idx].clone().to(torch.float32)
+
+        if use_cluster_weight:
+            d_keep = dist_all[keep_idx].clone()
+            z_keep = z[keep_idx]
+
+            # 在各自簇内做 min-max 归一化得到“靠中心程度”权重
+            w_center = torch.zeros_like(d_keep, dtype=torch.float32)
+            for k in range(num_classes):
+                idx_k = (z_keep == k).nonzero(as_tuple=True)[0]
+                if idx_k.numel() == 0:
+                    continue
+                dk = d_keep[idx_k]
+                dmin, dmax = dk.min(), dk.max()
+                if (dmax - dmin) < 1e-12:
+                    w_center[idx_k] = 1.0
+                else:
+                    w_center[idx_k] = 1.0 - (dk - dmin) / (dmax - dmin)  # 越近中心→越大
+
+            w_purity = purity[z_keep].to(torch.float32)
+            pseudo_w = (w_conf * w_center * w_purity).clamp_(0.0, 1.0)
+        else:
+            pseudo_w = w_conf
+
+    coverage = float(keep_idx.numel() / max(1, feats_all.size(0)))
+    stats = {
+        "cov_after_cluster": coverage,
+        "conf_th": conf_th,
+        "purity_mean": stat_cluster["purity_mean"],
+        "purity_median": stat_cluster["purity_median"],
+        "num_clusters_valid": stat_cluster["num_clusters_valid"],
+        "median_pmax_all": float(pmax_all.median().item()),
+        "mean_pmax_all": float(pmax_all.mean().item()),
+        "num_selected": int(keep_idx.numel()),
+    }
+
+    return pseudo_x, pseudo_y, pseudo_w, stats

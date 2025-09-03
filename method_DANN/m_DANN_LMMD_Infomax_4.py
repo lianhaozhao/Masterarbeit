@@ -200,6 +200,20 @@ def mmd2_weighted(a, b, w_a=None, w_b=None, gammas=(0.5,1,2,4,8)):
     e_bb = _weighted_mean_kernel(Kbb, w_b, w_b)
     e_ab = _weighted_mean_kernel(Kab, w_a, w_b)
     return (e_aa + e_bb - 2*e_ab).clamp_min(0.0)
+@torch.no_grad()
+def suggest_mmd_gammas(x_src, x_tgt, k=1024, scales=(0.25,0.5,1,2,4)):
+    x = torch.cat([x_src.detach(), x_tgt.detach()], dim=0)
+    n = x.size(0)
+    if k is None or k >= n:
+        xi, xj = x.unsqueeze(1), x.unsqueeze(0)
+        d2 = (xi - xj).pow(2).sum(-1).flatten()
+    else:
+        i = torch.randint(0, n, (k,), device=x.device)
+        j = torch.randint(0, n, (k,), device=x.device)
+        d2 = (x[i]-x[j]).pow(2).sum(-1)
+    m = d2.clamp_min(1e-12).median()
+    g0 = (1.0 / (2.0 * m)).item()
+    return [s * g0 for s in scales]
 
 def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
                                   num_classes, gammas=(0.5,1,2,4,8),
@@ -278,11 +292,12 @@ def train_dann_infomax_lmmd(model,
         len_pl = len(pl_loader) if pl_loader is not None else 0
         num_iters = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
 
-        cls_loss_sum = dom_loss_sum = mmd_loss_sum = im_loss_sum = 0.0
+        cls_loss_sum = dom_loss_sum = 0.0
         tot_loss_sum = 0.0
         tot_target_samples=tot_cls_samples = tot_dom_samples = 0
         dom_correct_src = dom_correct_tgt = 0
         dom_total_src = dom_total_tgt = 0
+        im_loss_sum = mmd_loss_sum = 0.0
 
         for _ in range(num_iters):
             try: src_x, src_y = next(it_src)
@@ -328,17 +343,23 @@ def train_dann_infomax_lmmd(model,
             loss_im = im_weight * loss_im
 
             # 4) Class-conditional LMMD (weighted, quality-gated)
-            feat_src_n = F.normalize(feat_src, dim=1)
+
             if tgt_pl_x is not None and lambda_mmd_eff > 0:
-                _, _, feat_tgt_pl = model(tgt_pl_x, grl=False)
-                feat_tgt_pl_n = F.normalize(feat_tgt_pl, dim=1)
+                was_training = model.training
+                model.eval()
+                with torch.set_grad_enabled(True):
+                    _, _, feat_src_lmmd = model(src_x, grl=False)
+                    _, _, feat_tgt_lmmd = model(tgt_pl_x, grl=False)
+                model.train(was_training)
+                gammas = suggest_mmd_gammas(feat_src_lmmd, feat_tgt_lmmd, k=1024)
                 loss_lmmd = classwise_mmd_biased_weighted(
-                    feat_src_n, src_y, feat_tgt_pl_n, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=3
+                    feat_src_lmmd, src_y, feat_tgt_lmmd, tgt_pl_y, tgt_pl_w,
+                    num_classes=num_classes, gammas=gammas,
+                    min_count_per_class=3
                 )
                 loss_lmmd = lambda_mmd_eff * loss_lmmd
             else:
-                loss_lmmd = feat_src_n.new_tensor(0.0)
+                loss_lmmd = torch.tensor(0.0, device=src_x.device)
 
             loss = loss_cls * 0.8 + loss_dom + loss_im + loss_lmmd
 
@@ -350,7 +371,8 @@ def train_dann_infomax_lmmd(model,
             cls_loss_sum  += loss_cls.item() * src_x.size(0)
             dom_loss_sum  += loss_dom.item() * (src_x.size(0) + tgt_x.size(0))
             im_loss_sum   += loss_im.item()  * (tgt_x.size(0))
-            mmd_loss_sum  += loss_lmmd.item() * src_x.size(0)
+            if tgt_pl_x is not None and lambda_mmd_eff > 0:
+                mmd_loss_sum  += loss_lmmd.item() * src_x.size(0)
             tot_loss_sum  += loss.item()     * (src_x.size(0) + tgt_x.size(0))
             tot_cls_samples += src_x.size(0)
             tot_dom_samples += (src_x.size(0) + tgt_x.size(0))
@@ -364,7 +386,7 @@ def train_dann_infomax_lmmd(model,
         # ---- Epoch Log ----
         avg_cls = cls_loss_sum / max(1, tot_cls_samples)
         avg_dom = dom_loss_sum / max(1, tot_dom_samples)
-        avg_im  = im_loss_sum  / max(1, tot_target_samples)
+        avg_im = im_loss_sum / max(1, tot_target_samples)
         avg_mmd = mmd_loss_sum / max(1, tot_cls_samples)
         avg_tot = tot_loss_sum / max(1, tot_dom_samples)
         acc_src = dom_correct_src / max(1, dom_total_src)
@@ -412,11 +434,11 @@ def train_dann_infomax_lmmd(model,
             else:
 
                 patience = 0
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T194_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(model, criterion_cls, test_loader, device)
+        # print("[INFO] Evaluating on target test set...")
+        # target_test_path = '../datasets/target/test/HC_T194_RP.txt'
+        # test_dataset = PKLDataset(target_test_path)
+        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        # general_test_model(model, criterion_cls, test_loader, device)
 
     if plateau_best_state is not None:
         model.load_state_dict(plateau_best_state)

@@ -70,3 +70,7 @@ def get_dataloaders(source_path, target_path, batch_size):
     source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)
     target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
     return source_loader, target_loader
+def get_pseudo_dataloaders( target_path, batch_size):
+
+    target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=False, drop_last=False)
+    return  target_loader
