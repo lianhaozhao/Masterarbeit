@@ -69,7 +69,3 @@ def get_pseudo_dataloaders( target_path, batch_size):
 
     target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=False, drop_last=False)
     return  target_loader
-def get_source_p_dataloaders(source_path, batch_size = 128):
-    source_dataset = PKLDataset(txt_path=source_path)
-    source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)
-    return source_loader

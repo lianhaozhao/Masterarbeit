@@ -37,20 +37,25 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
             out_channels = start_channels * (2 ** i)
             padding = (kernel_size - 1) // 2
             layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding,bias=False))
-            layers.append(nn.GroupNorm(num_groups=out_channels // 2, num_channels=out_channels))
+            g = max(1, out_channels // 8)
+            while out_channels % g != 0:
+                g -= 1
+            layers.append(nn.GroupNorm(num_groups=g, num_channels=out_channels))
             layers.append(activation_fn())
             layers.append(nn.MaxPool1d(kernel_size=2))
             in_channels = out_channels
 
         self.conv = nn.Sequential(*layers)
         with torch.no_grad():
-            dummy_input = torch.randn(1, 1, input_size)  # B=1, C=1, L=input_size
-            out = self.conv(dummy_input)
-            self.feature_dim = out.shape[1] * out.shape[2]  # C × L
+            dummy_input = torch.randn(1, 1, input_size)
+            out = self.conv(dummy_input)  # out: (1, C, L')
+            self.feature_dim = out.shape[1] * 2
 
     def forward(self, x):
         x = self.conv(x)  # (B, C, 1)
-        x = x.view(x.size(0), -1)  # 展平为 (B, C)
+        mu = x.mean(dim=-1)  # (B,C)
+        sigma = x.var(dim=-1, unbiased=False).clamp_min(1e-12).sqrt()  # (B,C)
+        x = torch.cat([mu, sigma], dim=1)  # (B,2C)
         return x
 
 
@@ -68,10 +73,9 @@ class Flexible_CNN_Classifier(nn.Module):
         p (float): Dropout probability.
         temperature (float): Scaling factor for cosine logits.
     """
-    def __init__(self, feature_dim, num_classes=10, hidden=512, p=0.2, temperature=0.05):
+    def __init__(self, feature_dim, num_classes=10, hidden=256, p=0.2, temperature=0.05):
         super().__init__()
         self.temperature = temperature
-
         #  Feature projection layer: Linear -> LayerNorm -> activation -> Dropout
         self.feat_proj = nn.Sequential(
             nn.Linear(feature_dim, hidden),
@@ -132,20 +136,8 @@ class Flexible_CNN(nn.Module):
             return out
 
 
-def freeze_feature_train_head(model, lr, weight_decay):
-    """
-        Freezes the feature extractor and returns an optimizer for training only the classifier head.
 
-        Args:
-            model (nn.Module): The model with 'feature_extractor' and 'classifier' attributes.
-            lr (float): Learning rate for the optimizer.
-            weight_decay (float): Weight decay (L2 regularization).
 
-        Returns:
-            torch.optim.Optimizer: Optimizer for the classifier parameters only.
-        """
-    for param in model.feature_extractor.parameters():
-        param.requires_grad = False
-    model.feature_extractor.eval()
-    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=lr, weight_decay=weight_decay)
-    return optimizer
+
+
+

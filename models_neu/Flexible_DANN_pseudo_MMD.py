@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from models.Flexible_CNN import Flexible_CNN_FeatureExtractor, Flexible_CNN_Classifier
+from models_neu.Flexible_CNN import Flexible_CNN_FeatureExtractor, Flexible_CNN_Classifier
 
 class GradientReversalFunction(torch.autograd.Function):
     @staticmethod
@@ -20,11 +20,11 @@ class DomainClassifier(nn.Module):
     def __init__(self, feature_dim, hidden=256, domain_dropout=0.2, num_domains=2):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(feature_dim, hidden,bias=False),
+            nn.Linear(feature_dim, hidden, bias=False),
             nn.LayerNorm(hidden),
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(domain_dropout),
-            nn.Linear(hidden, num_domains,bias=True),
+            nn.Linear(hidden, num_domains,bias=True)
         )
     def forward(self, x):
         return self.net(x)

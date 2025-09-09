@@ -1,66 +1,101 @@
 import torch
-import torch.nn.functional as F
 from sqlalchemy import false
+import math, numpy as np
+import torch.nn.functional as F
+from sklearn.cluster import KMeans
 
-
-def generate_pseudo_labels(model, target_loader, device, threshold=0.9, return_conf=True):
+# 伪标签 + 统计
+@torch.no_grad()
+def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1.0):
     """
-    Generate pseudo-labels from unlabeled target data based on model predictions.
+        Use the current model to perform "offline pseudo-annotation" on unlabeled data in the target domain, and calculate coverage and average quality.
 
-    Parameters:
-        model : Trained model used for inference.
-        target_loader (DataLoader): Dataloader providing unlabeled target domain data.
-        threshold (float): Confidence threshold for accepting a pseudo-label.
-        return_conf (bool): If True, also return per-sample confidence scores.
+        This function calculates the classification probability (with an optional temperature T) for each target domain sample.
+        Only samples with a top-1 probability conf >= threshold are retained as pseudo-labeled samples.
+        The difference in the (top-1 - top-2) probability is used as a "sample quality weight" (margin),
+        to facilitate downweighting of uncertain samples in subsequent class-conditional alignment (such as LMMD) or distillation.
 
-    Returns:
-        pseudo_data (Tensor): Selected input samples with confidence >= threshold.
-        pseudo_labels (Tensor): Corresponding pseudo-labels predicted by the model.
-        pseudo_conf (Tensor, optional): Confidence values for each pseudo-label (if return_conf=True).
+        This function is executed with `torch.no_grad()` + `model.eval()`, and no gradients or parameter updates are generated.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+        A trained (or training) classification model. Its `forward(x, grl=False)` should return
+        `(logits, domain_logits, features)`. This function only uses `logits`.
+        Note: GRL is disabled here with `grl=False` The reverse effect of `` (for semantic clarity only; no reverse effect with `no_grad`).
+
+        target_loader : torch.utils.data.DataLoader
+        DataLoader for the target domain's unlabeled data. `__getitem__` should return `x` or `(x, ...)`,
+        where only the first element is used as input.
+
+        device : torch.device
+        The inference device (e.g., `torch.device("cuda")` or `torch.device("cpu")`).
+
+        threshold : float, default=0.95
+        The pseudo-label retention threshold: retain samples if their top-1 probability `conf` satisfies `conf >= threshold`.
+
+        A higher threshold generally results in lower coverage (retention fraction) but higher quality.
+
+        T : float, default=1.0
+        Softmax temperature. Logits are divided by T before softmaxing:
+
+        - T > 1: probabilities are flatter (decreasing confidence, generally lower coverage);
+
+        - T < 1: Probability is more "sharp" (increasing confidence generally leads to higher coverage).
+
+        Returns
+        ------
+        x_cat : torch.Tensor
+        The concatenated tensor of target samples that pass the threshold, located in **CPU**.
+        y_cat : torch.Tensor
+        The corresponding "hard pseudo-label" (`argmax`), dtype `torch.long`, located in **CPU**.
+        w_cat : torch.Tensor
+        Sample-level weight (quality), using `margin = p_top1 - p_top2`, located in **CPU**.
+        stats : Dict[str, float]
+        Statistics dictionary, containing:
+        - "kept" : int, the number of samples `N_keep` retained in this round;
+        - "total" : int, the total number of target domain samples;
+        - "coverage" : float, coverage = `N_keep / total`;
+        - "margin_mean" : float, the average margin of the retained samples, a measure of the overall pseudo-label quality.
+
     """
 
     model.eval()
-    pseudo_data, pseudo_labels, pseudo_conf = [], [], []
-
-    with torch.no_grad():
-        for inputs in target_loader:
-            if isinstance(inputs, (tuple, list)):
-                inputs = inputs[0]
-
-            inputs = inputs.to(device)
-            outputs = model(inputs)[0]  # 只取分类输出
-            probs = F.softmax(outputs, dim=1)
-
-            confidence, predicted = torch.max(probs, dim=1)
-
-            mask = confidence >= threshold
-            if mask.any():
-                selected_inputs = inputs[mask]
-                selected_labels = predicted[mask]
-                selected_conf   = confidence[mask]
-
-                pseudo_data.append(selected_inputs.cpu())
-                pseudo_labels.append(selected_labels.cpu())
-                pseudo_conf.append(selected_conf.cpu())
-
-    if pseudo_data:
-        pseudo_data = torch.cat(pseudo_data, dim=0)
-        pseudo_labels = torch.cat(pseudo_labels, dim=0)
-        pseudo_conf = torch.cat(pseudo_conf, dim=0) if return_conf else None
+    xs, ys, ws = [], [], []
+    margins = []
+    total = 0
+    for batch in target_loader:
+        x = batch[0] if isinstance(batch, (tuple, list)) else batch
+        total += x.size(0)
+        x_dev = x.to(device)
+        logits, _, _ = model(x_dev)
+        prob = F.softmax(logits / T, dim=1)
+        top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
+        conf, _ = torch.max(prob, dim=1)  # [B]
+        margin = top2[:, 0] - top2[:, 1]  # [B]
+        keep = conf >= threshold
+        if keep.any():
+            xs.append(x_dev[keep].detach().cpu())
+            ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
+            ws.append(margin[keep].detach().cpu())
+            margins.append(margin[keep].detach().cpu())
+    if len(xs) == 0:
+        x_cat = torch.empty(0)
+        y_cat = torch.empty(0, dtype=torch.long)
+        w_cat = torch.empty(0)
+        cov = 0.0
+        margin_mean = 0.0
     else:
-        pseudo_data = torch.empty(0)
-        pseudo_labels = torch.empty(0, dtype=torch.long)
-        pseudo_conf = torch.empty(0)
+        x_cat = torch.cat(xs, dim=0)
+        y_cat = torch.cat(ys, dim=0)
+        w_cat = torch.cat(ws, dim=0)
+        cov = float(x_cat.size(0)) / max(1, total)
+        margin_mean = float(torch.cat(margins).mean())
+    return x_cat, y_cat, w_cat, {"kept": int(x_cat.size(0)), "total": int(total),
+                                 "coverage": cov, "margin_mean": margin_mean}
 
-    if return_conf:
-        return pseudo_data, pseudo_labels, pseudo_conf
-    else:
-        return pseudo_data, pseudo_labels
 
 
-import math, numpy as np, torch
-import torch.nn.functional as F
-from sklearn.cluster import KMeans
 
 # ========== 1) 提取“全部目标样本”的特征 + 伪标签  ==========
 @torch.no_grad()
