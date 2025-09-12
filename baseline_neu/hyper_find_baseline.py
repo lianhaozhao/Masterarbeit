@@ -5,7 +5,7 @@ import torch.optim as optim
 import optuna
 import numpy as np
 from torch.utils.data import DataLoader
-from models.Flexible_CNN import Flexible_CNN
+from models_neu.Flexible_CNN import Flexible_CNN
 from PKLDataset import PKLDataset
 from utils.train_utils import hyper_train_model
 import json
@@ -70,8 +70,8 @@ def hyper_optimization(trial):
               based on validation loss, with factor fixed at 0.7 and patience at 3.
     """
 
-    batch_size = trial.suggest_categorical("batch_size", [32])
-    learning_rate = trial.suggest_float("learning_rate", 1e-4, 5e-3, log=True)
+    batch_size = trial.suggest_categorical("batch_size", [32,64])
+    learning_rate = trial.suggest_float("learning_rate", 3e-4, 3e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 5e-4, log=True)
     num_layers = trial.suggest_int("num_layers", 4, 6)
     kernel_size = trial.suggest_categorical("kernel_size", [5, 7, 9, 15])
@@ -114,8 +114,8 @@ def hyper_optimization(trial):
         "kernel_size": kernel_size,
         "best_val_loss": best_val_loss,
     }
-    out_path = "../datasets/info"
-    trial_params_path = os.path.join(out_path, "params_baseline.json")
+    out_path = "../datasets/info2"
+    trial_params_path = os.path.join(out_path, "params.json")
     # 如果文件存在，先读取再追加
     if os.path.exists(trial_params_path):
         with open(trial_params_path, "r") as f:
@@ -136,7 +136,7 @@ def hyper_optimization(trial):
 if __name__ == '__main__':
     train_dataset = PKLDataset('../datasets/source/train/DC_T197_RP.txt')
     val_dataset = PKLDataset('../datasets/source/validation/DC_T197_RP.txt')
-    out_path = "../datasets/info"
+    out_path = "../datasets/info2"
     os.makedirs(out_path, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     study = optuna.create_study(direction="minimize",
@@ -147,7 +147,7 @@ if __name__ == '__main__':
         "best_params": study.best_trial.params,
         "best_value": study.best_trial.value
     }
-    with open(os.path.join(out_path, "best_params_baseline.json"), "w") as json_file:
+    with open(os.path.join(out_path, "best_params.json"), "w") as json_file:
         json.dump(best_result, json_file, indent=4)
     print(f"Beste Versuch: {study.best_trial.number}")
     print(f"Beste Hyperparameter: {study.best_trial.params}")

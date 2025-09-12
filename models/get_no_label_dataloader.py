@@ -20,7 +20,7 @@ class NoLabelDataset(torch.utils.data.Dataset):
         return signal
 
 
-def get_target_loader(path = None ,batch_size=64 , shuffle=True, drop_last=False):
+def get_target_loader(path = None ,batch_size=64 , shuffle=True, drop_last=True):
     """
         Loads unlabeled target domain data as a DataLoader for inference or pseudo-labeling.
 
@@ -62,7 +62,7 @@ def get_dataloaders(source_path, target_path, batch_size):
 
             """
     source_dataset = PKLDataset(txt_path=source_path)
-    source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)
+    source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True,drop_last=True)
     target_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
     return source_loader, target_loader
 def get_pseudo_dataloaders( target_path, batch_size):

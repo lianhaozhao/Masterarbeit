@@ -6,7 +6,7 @@ import os
 import numpy as np
 import random
 import yaml
-from models.Flexible_DANN import Flexible_DANN
+from models_neu.Flexible_DANN import Flexible_DANN
 from PKLDataset import PKLDataset
 from utils.general_train_and_test import general_test_model
 from models.get_no_label_dataloader import get_dataloaders
@@ -33,13 +33,13 @@ def adam_param_groups(model, weight_decay):
         {"params": no_decay, "weight_decay": 0.0},
     ]
 
-def dann_lambda(epoch, num_epochs,max_lambda = 1):
+def dann_lambda(epoch, num_epochs,max_lamda = 0.6):
     """
     Common DANN λ schedule: smoothly increases from 0 to 0.6
 
     """
     p = epoch / max(1, num_epochs - 1)
-    return (2. / (1. + np.exp(-7 * p)) - 1.) * max_lambda
+    return (2. / (1. + np.exp(-10 * p)) - 1.) * max_lamda
 
 def train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
@@ -57,12 +57,13 @@ def train_dann(model, source_loader, target_loader,
             src_x, src_y = src_x.to(device), src_y.to(device)
             tgt_x = tgt_x.to(device)
 
-            model.lambda_ = float(dann_lambda(epoch, num_epochs,max_lambda = 1))
             cls_out_src, dom_out_src = model(src_x)
             _, dom_out_tgt = model(tgt_x)
+
             loss_cls = criterion_cls(cls_out_src, src_y)
 
             # 域分类损失（DANN）
+            model.lambda_ = dann_lambda(epoch, num_epochs)
             dom_label_src = torch.zeros(src_x.size(0), dtype=torch.long, device=device)
             dom_label_tgt = torch.ones(tgt_x.size(0), dtype=torch.long, device=device)
             bs_src, bs_tgt = src_x.size(0), tgt_x.size(0)
@@ -114,18 +115,17 @@ def train_dann(model, source_loader, target_loader,
             print(f"[INFO] patience {patience} / 3")
             patience += 1
             if patience > 3:
-                if best_model_state is not None:
-                    model.load_state_dict(best_model_state)
+                model.load_state_dict(best_model_state)
                 print("[INFO] Early stopping: domain aligned and classifier converged.")
                 break
         else:
             patience = 0
             best_gap = gap
-        # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/target/test/HC_T185_RP.txt'
-        # test_dataset = PKLDataset(target_test_path)
-        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        # general_test_model(model, criterion_cls, test_loader, device)
+        print("[INFO] Evaluating on target test set...")
+        target_test_path = '../datasets/target/test/HC_T185_RP.txt'
+        test_dataset = PKLDataset(target_test_path)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        general_test_model(model, criterion_cls, test_loader, device)
 
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
@@ -135,61 +135,48 @@ def train_dann(model, source_loader, target_loader,
 
 if __name__ == '__main__':
     # set_seed(seed=44)
-    with open("../configs/default.yaml", 'r') as f:
-        config = yaml.safe_load(f)['DANN_LMMD_INFO']
+    with open("../configs/default2.yaml", 'r') as f:
+        config = yaml.safe_load(f)['Baseline']
     batch_size = config['batch_size']
-    learning_rate = 0.0011149529810769747
-    weight_decay = 3.3975734111741645e-06
+    learning_rate = config['learning_rate']
+    weight_decay = config['weight_decay']
     num_layers = config['num_layers']
     kernel_size = config['kernel_size']
     start_channels = config['start_channels']
     num_epochs = 20
 
-    files = [185, 188, 191, 194, 197]
-    for file in files:
+    source_path = '../datasets/source/train/DC_T197_RP.txt'
+    target_path = '../datasets/target/train/HC_T185_RP.txt'
+    target_test_path = '../datasets/target/test/HC_T185_RP.txt'
+    out_path = 'model'
+    os.makedirs(out_path, exist_ok=True)
 
-        source_path= '../datasets/source/train/DC_T197_RP.txt'
-        target_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        target_test_path = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
-        out_path = 'model'
-        os.makedirs(out_path, exist_ok=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = Flexible_DANN(num_layers=num_layers,
+                          start_channels=start_channels,
+                          kernel_size=kernel_size,
+                          cnn_act='leakrelu',
+                          num_classes=10,
+                          lambda_=1).to(device)
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    source_loader, target_loader = get_dataloaders(source_path, target_path, batch_size)
 
-        print(f"[INFO] Loading HC_T{file} ...")
+    optimizer = torch.optim.Adam(
+        adam_param_groups(model, weight_decay=weight_decay),
+        lr=learning_rate, betas=(0.9, 0.999)
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=num_epochs, eta_min=learning_rate * 0.1
+    )
+    criterion_cls = nn.CrossEntropyLoss()
+    criterion_domain = nn.CrossEntropyLoss()
 
-        for run_id in range(5):
+    print("[INFO] Starting standard DANN training (no pseudo labels)...")
+    model=train_dann(model, source_loader, target_loader,
+               optimizer, criterion_cls, criterion_domain,
+               device, num_epochs=40, dann_lambda=dann_lambda,scheduler=scheduler)
 
-            model = Flexible_DANN(num_layers=num_layers,
-                                  start_channels=start_channels,
-                                  kernel_size=kernel_size,
-                                  cnn_act='leakrelu',
-                                  num_classes=10,
-                                  lambda_=1).to(device)
-
-            source_loader, target_loader = get_dataloaders(source_path, target_path, batch_size)
-
-            optimizer = torch.optim.Adam(
-                adam_param_groups(model, weight_decay),
-                lr=learning_rate, betas=(0.9, 0.999)
-            )
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=num_epochs, eta_min=learning_rate * 0.1
-            )
-            criterion_cls = nn.CrossEntropyLoss()
-            criterion_domain = nn.CrossEntropyLoss()
-
-            print("[INFO] Starting standard DANN training (no pseudo labels)...")
-            model=train_dann(model, source_loader, target_loader,
-                       optimizer, criterion_cls, criterion_domain,
-                       device, num_epochs=num_epochs, dann_lambda=dann_lambda,scheduler=scheduler)
-
-            print("[INFO] Evaluating on target test set...")
-            test_dataset = PKLDataset(target_path)
-            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-            general_test_model(model, criterion_cls, test_loader, device)
-
-            del model, optimizer, scheduler, source_loader, target_loader, test_loader, test_dataset
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
+    print("[INFO] Evaluating on target test set...")
+    test_dataset = PKLDataset(target_test_path)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    general_test_model(model, criterion_cls, test_loader, device)

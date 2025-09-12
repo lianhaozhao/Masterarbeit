@@ -12,8 +12,6 @@ from models.get_no_label_dataloader import get_dataloaders
 from utils.general_train_and_test import general_test_model
 from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
 
-
-
 def adam_param_groups(model, weight_decay):
     """对 BN/偏置不做 weight decay"""
     decay, no_decay = [], []
@@ -40,58 +38,7 @@ def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
     p = (epoch - start_epoch) / max(1, (num_epochs - 1 - start_epoch))
     return (2.0 / (1.0 + np.exp(-3 * p)) - 1.0) * max_lambda
 
-# ------------------ InfoMax (target domain) ------------------
-@torch.no_grad()
-def _safe_mean_prob(p, eps=1e-8):
-    p = p.clamp_min(eps)
-    return p / p.sum(dim=1, keepdim=True)
 
-def entropy_mean(p, eps=1e-8):
-    # E_x[ H(p_x) ]
-    p = p.clamp_min(eps)
-    return (-p * p.log()).sum(dim=1).mean()
-
-def entropy_marginal(p, eps=1e-8):
-    # H( E_x[p_x] )
-    p_bar = p.mean(dim=0)
-    p_bar = p_bar.clamp_min(eps)
-    return -(p_bar * p_bar.log()).sum()
-
-def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
-    """
-        依据 “信息最大化” (InfoMax) 思想，从分类 logits 计算无监督正则项：
-        I(z; ŷ) = H(ŷ) - H(ŷ|z)。
-        训练中最小化的目标为：
-            L = H(ŷ|z) - w * H(ŷ)
-        其中 H(ŷ|z) 是条件熵（鼓励单样本预测更自信），H(ŷ) 是边际熵（鼓励整体类别使用均衡，防止塌缩）。
-
-        参数
-        ----
-        logits : Tensor
-            分类头输出的未归一化得分，形状 [B, C]。
-        T : float, 默认 1.0
-            Softmax 温度。T > 1 使分布变“软”（置信度下降），T < 1 使分布变“尖”（置信度上升）。
-            会同时影响条件熵与边际熵的数值。
-        marg_weight : float, 默认 1.0
-            边际熵权重 w。数值越大，越强烈地抑制“塌缩到单一类别”的解。
-            常见范围 0.5 ~ 2.0，可据验证集曲线调参。
-
-        返回
-        ----
-        loss : Tensor (标量，requires_grad=True)
-            最小化目标：H(ŷ|z) - w * H(ŷ)。用于反向传播。
-        h_cond_detached : Tensor (标量，no grad)
-            条件熵 H(ŷ|z) 的经验估计（E_x[-∑_c p(c|x) log p(c|x)]）。仅用于日志监控。
-        h_marg_detached : Tensor (标量，no grad)
-            边际熵 H(ŷ) 的经验估计，其中 ŷ 的边际分布为 p̄ = E_x[p(·|x)]。
-            数学形式：H(ŷ) = -∑_c p̄_c log p̄_c。仅用于日志监控。
-
-        """
-    # I(z;ŷ) = H(ŷ) - H(ŷ|z); minimiere  H(ŷ|z) - w * H(ŷ)
-    p = F.softmax(logits / T, dim=1)  # [B, C], Klassenwahrscheinlichkeiten pro Beispiel
-    h_cond = entropy_mean(p)  # Skalar, Schätzung der bedingten Entropie
-    h_marg = entropy_marginal(p)  # Schätzung der marginalen Entropie
-    return h_cond - marg_weight * h_marg, h_cond.detach(), h_marg.detach()
 
 def _standardize_feat(Z, eps=1e-6):
     mu = Z.mean(dim=0, keepdim=True)
@@ -211,10 +158,9 @@ def train_dann_infomax_coral(model,
                              optimizer, criterion_cls, criterion_domain,
                              device, num_epochs=20, num_classes=10,
                              scheduler=None, batch_size=16,
-                             # InfoMax
-                             im_T=1.0, im_weight=0.5, im_marg_w=1.0,
+                             threshold = 0.5,T=2,coral_start_epoch=5,
                              # Gating
-                             coral_start_epoch=5,
+                             grl_lambda_max=1,max_lambda=0.5,
                              ):
     # Hyperparameters related to early stopping
     W = 4
@@ -238,7 +184,7 @@ def train_dann_infomax_coral(model,
         cov = margin_mean = 0.0
         if epoch >= coral_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, target_loader, device, threshold=0.95, T=2
+                model, target_loader, device, threshold=threshold, T=T
             )
             kept, total = stats["kept"], stats["total"]
             cov, margin_mean = stats["coverage"], stats["margin_mean"]
@@ -247,7 +193,7 @@ def train_dann_infomax_coral(model,
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
 
         # 2) Gated LMMD weights
-        lambda_coral_eff = mmd_lambda(epoch, num_epochs, max_lambda=15e-2, start_epoch=coral_start_epoch)
+        lambda_coral_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=coral_start_epoch)
 
 
         # 3) epoch training
@@ -289,7 +235,7 @@ def train_dann_infomax_coral(model,
 
             # forword
             # Put λ only into GRL
-            model.lambda_ = float(dann_lambda(epoch, num_epochs))
+            model.lambda_ = float(dann_lambda(epoch, num_epochs, max_lambda=grl_lambda_max))
             cls_out_src, dom_out_src, feat_src = model(src_x, grl=True)
             cls_out_tgt, dom_out_tgt, feat_tgt = model(tgt_x, grl=True)
 
@@ -304,38 +250,34 @@ def train_dann_infomax_coral(model,
                 + criterion_domain(dom_out_tgt, dom_label_tgt) * tgt_x.size(0)
             ) / (src_x.size(0) + tgt_x.size(0))
 
-            # 3) InfoMax
-            loss_im, h_cond, h_marg = infomax_loss_from_logits(cls_out_tgt, T=im_T, marg_weight=im_marg_w)
-            loss_im = im_weight * loss_im
 
-            # 4) Class-conditional LMMD (weighted, quality-gated)
+            # 3) Class-conditional LMMD (weighted, quality-gated)
 
             if tgt_pl_x is not None and lambda_coral_eff > 0:
                 was_training = model.training
                 model.eval()
-                with torch.set_grad_enabled(True):
-                    _, _, feat_src_lmmd = model(src_x, grl=False)
-                    _, _, feat_tgt_lmmd = model(tgt_pl_x, grl=False)
+                with torch.no_grad():
+                    _, _, feat_src_coral = model(src_x, grl=False)
+                    _, _, feat_tgt_coral = model(tgt_pl_x, grl=False)
                 model.train(was_training)
-
                 loss_coral = classwise_coral_weighted(
-                    feat_src_lmmd, src_y, feat_tgt_lmmd, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, min_count_per_class=8
+                    feat_src_coral, src_y, feat_tgt_coral, tgt_pl_y, tgt_pl_w,
+                    num_classes=num_classes, min_count_per_class=2
                 )
                 loss_coral = lambda_coral_eff * loss_coral
             else:
                 loss_coral = feat_src.new_tensor(0.0)
 
-            loss = loss_cls + loss_dom + loss_im + loss_coral
+            loss = loss_cls + loss_dom + loss_coral
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
 
             # ------ Statistics ------
             cls_loss_sum  += loss_cls.item() * src_x.size(0)
             dom_loss_sum  += loss_dom.item() * (src_x.size(0) + tgt_x.size(0))
-            im_loss_sum += loss_im.item() * (tgt_x.size(0))
             coral_loss_sum  += loss_coral.item() * src_x.size(0)
             tot_loss_sum  += loss.item()     * (src_x.size(0) + tgt_x.size(0))
             tot_cls_samples += src_x.size(0)
@@ -350,7 +292,6 @@ def train_dann_infomax_coral(model,
         # ---- Epoch Log ----
         avg_cls = cls_loss_sum / max(1, tot_cls_samples)
         avg_dom = dom_loss_sum / max(1, tot_dom_samples)
-        avg_im  = im_loss_sum  / max(1, tot_target_samples)
         avg_coral = coral_loss_sum / max(1, tot_cls_samples)
         avg_tot = tot_loss_sum / max(1, tot_dom_samples)
         acc_src = dom_correct_src / max(1, dom_total_src)
@@ -360,13 +301,13 @@ def train_dann_infomax_coral(model,
         if scheduler is not None: scheduler.step()
 
         print(f"[Epoch {epoch+1}] Total loss:{avg_tot:.4f} | Avg cls loss:{avg_cls:.4f} | avg Dom loss:{avg_dom:.4f} "
-              f"| avg IM loss:{avg_im:.4f} | avg coral loss:{avg_coral:.4f} | DomAcc:{dom_acc:.4f} | "
+              f"| avg coral loss:{avg_coral:.4f} | DomAcc:{dom_acc:.4f} | "
               f"cov:{cov:.2%} | "
               f"λ_GRL:{model.lambda_:.4f} | λ_coral_eff:{lambda_coral_eff:.4f}")
 
         gap_hist.append(gap)
 
-        score = gap  + avg_im
+        score = gap
 
         # Record the optimal model
         if epoch > 15:
@@ -396,11 +337,6 @@ def train_dann_infomax_coral(model,
             else:
 
                 patience = 0
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T194_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(model, criterion_cls, test_loader, device)
 
     if plateau_best_state is not None:
         model.load_state_dict(plateau_best_state)
@@ -413,9 +349,9 @@ def train_dann_infomax_coral(model,
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['baseline']
-    bs = cfg['batch_size']
-    lr = cfg['learning_rate']
-    wd = cfg['weight_decay']
+    bs = 64
+    lr = 0.000492917441228604
+    wd = 4.032905396021506e-07
     num_layers = cfg['num_layers']
     ksz = cfg['kernel_size']
     sc = cfg['start_channels']
@@ -439,7 +375,10 @@ if __name__ == "__main__":
                                   cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
 
             src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+            optimizer = torch.optim.Adam(
+                adam_param_groups(model, wd),
+                lr=lr, betas=(0.9, 0.999)
+            )
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
             c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
 
@@ -448,11 +387,9 @@ if __name__ == "__main__":
                 model, src_loader, tgt_loader,
                 optimizer, c_cls, c_dom, device,
                 num_epochs=num_epochs, num_classes=10,
-
                 scheduler=scheduler, batch_size=bs,
-                # InfoMax Hyperparameters
-                im_T=1.0, im_weight=0.8, im_marg_w=1.0,
-                coral_start_epoch=5
+                threshold=0.95,T=1.5,coral_start_epoch=4,
+                grl_lambda_max=0.7,max_lambda=0.5458,
             )
 
             print("[INFO] Evaluating on target test set...")

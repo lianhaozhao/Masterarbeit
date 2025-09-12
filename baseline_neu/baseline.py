@@ -2,13 +2,13 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
-from models.Flexible_CNN import Flexible_CNN
+from models_neu.Flexible_CNN import Flexible_CNN
 from PKLDataset import PKLDataset
 from torch.utils.data import DataLoader
 import yaml
 import random
 from tqdm import tqdm
-from n_PKLDataset import N_PKLDataset,fit_normalizer_from_txt
+
 # seed = 42
 # torch.manual_seed(seed)
 # np.random.seed(seed)
@@ -29,8 +29,8 @@ def adam_param_groups(model, wd):
 
 
 
-with open("../configs/default.yaml", 'r') as f:
-    config = yaml.safe_load(f)['DANN_LMMD_INFO']
+with open("../configs/default2.yaml", 'r') as f:
+    config = yaml.safe_load(f)['Baseline']
 # Extract parameters
 batch_size = config['batch_size']
 learning_rate = config['learning_rate']
@@ -57,11 +57,11 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
         for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch+1} Training"):
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
-            outputs = outputs[0] if isinstance(outputs, tuple) else outputs
             loss = criterion(outputs, labels)
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
 
             batch_size_actual = inputs.size(0)
@@ -85,7 +85,6 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
             for inputs, labels in val_loader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
-                outputs = outputs[0] if isinstance(outputs, tuple) else outputs
                 loss = criterion(outputs, labels)
 
                 batch_size_actual = inputs.size(0)
@@ -114,7 +113,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
         else:
             patience_counter += 1
             print(f"Patience Counter: {patience_counter}/{early_stopping_patience}")
-            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.25:
+            if patience_counter >= early_stopping_patience and epoch > num_epochs * 0.3:
                 print(f"Early stopping at epoch {epoch + 1}.")
                 break
 
@@ -126,7 +125,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, device,
 
 if __name__ == '__main__':
 
-    for i in range(10):
+    for i in range(1):
         train_dataset = PKLDataset('../datasets/source/train/DC_T197_RP.txt')
         val_dataset = PKLDataset('../datasets/source/validation/DC_T197_RP.txt')
         out_path = f"model/run_{i}"

@@ -1,0 +1,9 @@
+Baseline:
+  batch_size: 32
+  learning_rate: 0.0004507846556284161
+  weight_decay: 9.946759247947164e-05
+  num_layers: 6
+  kernel_size: 5
+  start_channels: 8
+  num_epochs: 40
+  early_stopping_patience: 3

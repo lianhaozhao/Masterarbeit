@@ -55,7 +55,7 @@ def hyper_train_model(model, train_loader, val_loader, optimizer, criterion, dev
         else:
             patience_counter += 1
             print(f"Patience Counter: {patience_counter}/{early_stopping_patience}")
-            if patience_counter >= early_stopping_patience and epoch > num_epochs*0.4:
+            if patience_counter >= early_stopping_patience and epoch > 10:
                 print(f"Early stopping at epoch {epoch + 1}.")
                 break
 

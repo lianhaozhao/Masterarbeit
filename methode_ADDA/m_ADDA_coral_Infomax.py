@@ -163,54 +163,96 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
                                  "coverage": cov, "margin_mean": margin_mean}
 
 
-#  Weighted Class Conditional MMD (Multi-core RBF)
-def _pairwise_sq_dists(a, b):
-    # a: [m,d], b: [n,d]
-    a2 = (a*a).sum(dim=1, keepdim=True)       # [m,1]
-    b2 = (b*b).sum(dim=1, keepdim=True).t()   # [1,n]
-    return a2 + b2 - 2 * (a @ b.t())
+#  Weighted Class Conditional coral (Multi-core RBF)
+def _weighted_mean(X, w=None, eps=1e-8):
+    # X: [n,d], w: [n]
+    if w is None:
+        return X.mean(dim=0, keepdim=True)  # [1,d]
+    w = w.view(-1, 1)
+    s = torch.clamp(w.sum(), min=eps)
+    return (w * X).sum(dim=0, keepdim=True) / s
 
-def _mk_kernel(a, b, gammas):
-    d2 = _pairwise_sq_dists(a, b).clamp_min(0)
-    k = 0.0
-    M = max(1, len(gammas))
-    for g in gammas:
-        k = k + torch.exp(-float(g) * d2)
-    return k / M
+def _weighted_cov(X, w=None, eps=1e-8, unbiased=False):
+    """
+    返回加权协方差矩阵 Σ: [d,d]
+    X: [n,d], w: [n]
+    """
+    n, d = X.shape
+    if n <= 1:
+        return X.new_zeros(d, d)
+    if w is None:
+        mu = X.mean(dim=0, keepdim=True)                    # [1,d]
+        Xc = X - mu
+        # 无权：等价于 (Xc^T Xc) / (n-1)（若 unbiased）
+        denom = (n - 1 if unbiased and n > 1 else n)
+        return (Xc.t() @ Xc) / max(1.0, float(denom))
+    else:
+        w = w.view(-1, 1)                                   # [n,1]
+        s = torch.clamp(w.sum(), min=eps)
+        mu = (w * X).sum(dim=0, keepdim=True) / s           # [1,d]
+        Xc = X - mu
+        # 加权协方差：Xc^T diag(w) Xc / s   （常用定义；如需无偏修正可加权修正项）
+        Sigma = (Xc.t() @ (w * Xc)) / s
+        return Sigma
 
-def _weighted_mean_kernel(K, w_row, w_col):
-    # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))
-    num = (w_row.view(1,-1) @ K @ w_col.view(-1,1)).squeeze()
-    den = (w_row.sum() * w_col.sum()).clamp_min(1e-8)
-    return num / den
+def coral_loss_from_cov(S_s, S_t, norm='fro', eps=1e-12):
+    """
+    标准 CORAL: || S_s - S_t ||_F^2
+    可选归一化，避免维度/尺度差异影响权重。
+    """
+    D = S_s - S_t
+    if norm == 'fro':
+        return (D * D).sum()
+    elif norm == 'trace':
+        # trace 归一化：除以 d^2（或 4 d^2）等，常见实现里会做一个常数缩放
+        d = S_s.size(0)
+        return (D * D).sum() / (d * d + eps)
+    else:
+        return (D * D).sum()
 
-def mmd2_weighted(a, b, w_a=None, w_b=None, gammas=(0.5,1,2,4,8)):
-    # MMD^2 = E_aa k + E_bb k - 2 E_ab k  （weight）
-    if w_a is None: w_a = torch.ones(a.size(0), device=a.device)
-    if w_b is None: w_b = torch.ones(b.size(0), device=b.device)
-    Kaa = _mk_kernel(a, a, gammas)
-    Kbb = _mk_kernel(b, b, gammas)
-    Kab = _mk_kernel(a, b, gammas)
-    e_aa = _weighted_mean_kernel(Kaa, w_a, w_a)
-    e_bb = _weighted_mean_kernel(Kbb, w_b, w_b)
-    e_ab = _weighted_mean_kernel(Kab, w_a, w_b)
-    return (e_aa + e_bb - 2*e_ab).clamp_min(0.0)
-
-def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
-                                  num_classes, gammas=(0.5,1,2,4,8),
-                                  min_count_per_class=2):
+def classwise_coral_weighted(
+    feat_src, y_src, feat_tgt, y_tgt, w_tgt,
+    num_classes,
+    min_count_per_class=2,
+    add_mean_align=True,         # 是否额外加入类均值对齐项
+    mean_weight=1.0,             # 均值项系数
+    cov_norm='trace',            # 'fro' 或 'trace'
+    unbiased_cov=False           # 是否对无权情形使用 n-1
+):
+    """
+    类条件 CORAL：对每个类 c，对齐源/目标的协方差（和可选的均值）。
+    外层以 min(ns, nt) 对各类加权平均。
+    目标端使用 w_tgt 作为样本权重。
+    """
     total = feat_src.new_tensor(0.0)
     wsum = 0.0
+
     for c in range(num_classes):
         ms = (y_src == c)
         mt = (y_tgt == c)
         ns, nt = int(ms.sum()), int(mt.sum())
         if ns >= min_count_per_class and nt >= min_count_per_class:
-            w_c = w_tgt[mt]
-            mmd_c = mmd2_weighted(feat_src[ms], feat_tgt[mt], None, w_c, gammas)
+            Xs = feat_src[ms]             # [ns,d]
+            Xt = feat_tgt[mt]             # [nt,d]
+            wt = w_tgt[mt]                # [nt]
+
+            # 协方差（源：无权；目标：带权）
+            Cs = _weighted_cov(Xs, w=None, unbiased=unbiased_cov)
+            Ct = _weighted_cov(Xt, w=wt,   unbiased=False)
+
+            loss_c = coral_loss_from_cov(Cs, Ct, norm=cov_norm)
+
+            if add_mean_align:
+                mus = _weighted_mean(Xs, w=None)            # [1,d]
+                mut = _weighted_mean(Xt, w=wt)              # [1,d]
+                loss_mean = F.mse_loss(mus, mut, reduction='sum')  # 或 'mean' 再调系数
+                loss_c = loss_c + mean_weight * loss_mean
+
+            # 类权重
             w = float(min(ns, nt))
-            total = total + mmd_c * w
+            total = total + loss_c * w
             wsum += w
+
     return total / wsum if wsum > 0 else total
 
 
@@ -228,185 +270,69 @@ def copy_encoder_params(src_model, tgt_model, device):
     tgt_model.to(device)
 
 
-# ===== 新增：阶段1 —— 仅用源域训练 (F_s + C) =====
-# def pretrain_source_classifier(
-#         src_model,
-#         source_loader,
-#         target_loader,
-#         optimizer,lr_d,weight_decay,
-#         criterion_cls,
-#         device,
-#         num_epochs=5,
-#         scheduler=None,
-#         extra_target_pass=True  # 是否在每个 epoch 末额外跑一遍 target-only InfoMax
-# ):
-#     """
-#     - 源域：交叉熵 -> 更新 feature_extractor + classifier
-#     - 目标域：InfoMax 仅更新 classifier（对 feature_extractor 用 eval()+no_grad 提特征）
-#     - 可选：epoch 末再做一遍 target-only InfoMax，扩大目标覆盖
-#     """
-#     src_model.train()
-#     opt_c = torch.optim.Adam(src_model.classifier.parameters(), lr=lr_d, weight_decay=weight_decay)
-#
-#     for epoch in range(num_epochs):
-#         tot_loss = tot_n = 0.0
-#
-#         # ===== 源域 CE + 目标域 InfoMax（只训分类头）的混合小循环 =====
-#         for xb, yb in source_loader:
-#             xb, yb = xb.to(device), yb.to(device)
-#
-#             # 1) 源域监督 CE：正常 forward（允许更新提取器与分类头）
-#             logits_s, _, _ = src_model(xb)
-#             loss = criterion_cls(logits_s, yb)
-#
-#             optimizer.zero_grad()
-#             loss.backward()
-#             optimizer.step()
-#
-#             bs = xb.size(0)
-#             tot_loss += loss.item() * bs
-#             tot_n += bs
-#         # ===== 额外 target-only InfoMax（只训分类头；可选）=====
-#         if extra_target_pass:
-#             src_model.classifier.train()
-#             was_train = src_model.feature_extractor.training
-#             src_model.feature_extractor.eval()
-#             for batch_t in target_loader:
-#                 x_t = batch_t[0] if isinstance(batch_t, (list, tuple)) else batch_t
-#                 x_t = x_t.to(device)
-#                 with torch.no_grad():
-#                     feat_t = src_model.feature_extractor(x_t)
-#                 logits_t_head = src_model.classifier(feat_t)
-#                 L_im_extra, _, _ = infomax_loss_from_logits(logits_t_head, T=1)
-#
-#                 opt_c.zero_grad(set_to_none=True)
-#                 L_im_extra.backward()
-#                 optimizer.step()
-#             src_model.feature_extractor.train(was_train)
-#
-#         print(f"[SRC PRETRAIN+IM] Epoch {epoch + 1}/{num_epochs} | "
-#               f"Loss:{tot_loss / max(1, tot_n):.4f} ")
-#
-#         if scheduler is not None:
-#             scheduler.step()
-#
-#     return src_model
 def pretrain_source_classifier(
         src_model,
         source_loader,
         target_loader,
-        optimizer, lr_d, weight_decay,
+        optimizer,
         criterion_cls,
         device,
         num_epochs=5,
         scheduler=None,
-        extra_target_pass=True,
-        # 新增：伪标签相关
-        use_pseudo=True,
-        tau=0.95,                 # 初始置信度阈值
-        beta_pl=0.35,              # 伪标签损失权重
-        per_class_topk=None,      # 如 50：每类最多取 50 个；None 表示只用阈值
+        extra_target_pass=True  # 是否在每个 epoch 末额外跑一遍 target-only InfoMax
 ):
+    """
+    - 源域：交叉熵 -> 更新 feature_extractor + classifier
+    - 目标域：InfoMax 仅更新 classifier（对 feature_extractor 用 eval()+no_grad 提特征）
+    - 可选：epoch 末再做一遍 target-only InfoMax，扩大目标覆盖
+    """
     src_model.train()
-    # 只建一次分类头优化器（InfoMax/伪标签都用它）
-    opt_c = torch.optim.Adam(src_model.classifier.parameters(), lr=lr_d, weight_decay=weight_decay)
 
     for epoch in range(num_epochs):
         tot_loss = tot_n = 0.0
 
-        # ===== 源域 CE =====
+        # ===== 源域 CE + 目标域 InfoMax（只训分类头）的混合小循环 =====
         for xb, yb in source_loader:
             xb, yb = xb.to(device), yb.to(device)
+
+            # 1) 源域监督 CE：正常 forward（允许更新提取器与分类头）
             logits_s, _, _ = src_model(xb)
             loss = criterion_cls(logits_s, yb)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            bs = xb.size(0); tot_loss += loss.item() * bs; tot_n += bs
 
-        # ===== 目标 InfoMax（只训 C；可选）=====
+            bs = xb.size(0)
+            tot_loss += loss.item() * bs
+            tot_n += bs
+        # ===== 额外 target-only InfoMax（只训分类头；可选）=====
         if extra_target_pass:
-            src_model.classifier.train()
-            was_train = src_model.feature_extractor.training
-            src_model.feature_extractor.eval()
             for batch_t in target_loader:
                 x_t = batch_t[0] if isinstance(batch_t, (list, tuple)) else batch_t
                 x_t = x_t.to(device)
+
+                was_train = src_model.feature_extractor.training
+                src_model.feature_extractor.eval()
                 with torch.no_grad():
                     feat_t = src_model.feature_extractor(x_t)
-                logits_t = src_model.classifier(feat_t)
-                L_im, _, _ = infomax_loss_from_logits(logits_t, T=1)
-                opt_c.zero_grad(set_to_none=True)
-                L_im.backward()
-                opt_c.step()
-            src_model.feature_extractor.train(was_train)
+                src_model.feature_extractor.train(was_train)
 
-        # ======== 新增：伪标签训练（只训 C）========
-        if use_pseudo:
-            src_model.classifier.train()
-            was_train = src_model.feature_extractor.training
-            src_model.feature_extractor.eval()
+                logits_t_head = src_model.classifier(feat_t)
+                L_im_extra, _, _ = infomax_loss_from_logits(logits_t_head, T=1)
 
-            # 1) 全量打分与挑选
-            xs_sel, ys_sel = [], []
-            with torch.no_grad():
-                for batch_t in target_loader:
-                    x_t = batch_t[0] if isinstance(batch_t, (list, tuple)) else batch_t
-                    x_t = x_t.to(device)
-                    feat_t = src_model.feature_extractor(x_t)
-                    logits_t = src_model.classifier(feat_t)
-                    probs = F.softmax(logits_t, dim=1)
-                    conf, yhat = probs.max(dim=1)
-                    mask = conf >= tau
-                    if mask.any():
-                        xs_sel.append(x_t[mask].detach().cpu())
-                        ys_sel.append(yhat[mask].detach().cpu())
+                optimizer.zero_grad()
+                L_im_extra.backward()
+                optimizer.step()
 
-            if xs_sel:  # 可能这一轮没人达标
-                X = torch.cat(xs_sel, dim=0)
-                Y = torch.cat(ys_sel, dim=0)
-
-                # 2) 可选：每类 top-k 做类均衡
-                if per_class_topk is not None:
-                    idx_keep = []
-                    num_classes = src_model.classifier[-1].out_features if hasattr(src_model.classifier, '__getitem__') else int(Y.max().item()+1)
-                    for c in range(num_classes):
-                        idx_c = (Y == c).nonzero(as_tuple=True)[0]
-                        if idx_c.numel() == 0:
-                            continue
-                        # 这里简单随机取前 k；若需要按置信度排序，请把 conf 收集起来一起排序
-                        k = min(per_class_topk, idx_c.numel())
-                        idx_keep.append(idx_c[:k])
-                    if idx_keep:
-                        keep = torch.cat(idx_keep, dim=0)
-                        X, Y = X[keep], Y[keep]
-
-                # 3) 用选中样本微调分类头（保持 Fs 冻结）
-                pl_loader = DataLoader(TensorDataset(X, Y), batch_size=source_loader.batch_size, shuffle=True)
-                for x_pl, y_pl in pl_loader:
-                    x_pl, y_pl = x_pl.to(device), y_pl.to(device)
-                    with torch.no_grad():
-                        feat_pl = src_model.feature_extractor(x_pl)
-                    logits_pl = src_model.classifier(feat_pl)
-                    loss_pl = criterion_cls(logits_pl, y_pl)
-
-                    opt_c.zero_grad(set_to_none=True)
-                    (beta_pl * loss_pl).backward()
-                    opt_c.step()
-
-            # 恢复 Fs 状态
-            src_model.feature_extractor.train(was_train)
-
-        print(f"[SRC PRETRAIN+IM+PL] Epoch {epoch+1}/{num_epochs} | "
-              f"srcCE:{tot_loss/max(1,tot_n):.4f} | tau:{tau:.2f} beta_pl:{beta_pl}")
+        print(f"[SRC PRETRAIN+IM] Epoch {epoch + 1}/{num_epochs} | "
+              f"Loss:{tot_loss / max(1, tot_n):.4f} ")
 
         if scheduler is not None:
             scheduler.step()
 
-        # 可选：阈值随 epoch 递减以提高覆盖率
-        tau = max(0.80, tau - 0.02)
-
     return src_model
+
 # ===== 新增：阶段2 —— ADDA 对抗 + (可选) InfoMax + (可选) LMMD =====
 def train_adda_infomax_lmmd(
     src_model, tgt_model, source_loader, target_loader,
@@ -543,13 +469,11 @@ def train_adda_infomax_lmmd(
                     xpl, ypl, wpl = xpl.to(device), ypl.to(device), wpl.to(device)
                     with torch.no_grad():
                         _, _,f_s_n = src_model(xs)
-                        f_s_n = F.normalize(f_s_n, dim=1)
                     _, _,f_t_pl = tgt_model(xpl)
-                    f_t_pl_n = F.normalize(f_t_pl, dim=1)
-                    loss_lmmd = classwise_mmd_biased_weighted(
-                        f_s_n, ys, f_t_pl_n, ypl, wpl,
-                        num_classes=num_classes, gammas=mmd_gammas, min_count_per_class=2
-                    )
+                    loss_lmmd = classwise_coral_weighted(
+                    f_s_n, ys, f_t_pl, ypl, wpl,
+                    num_classes=num_classes, min_count_per_class=3
+                )
                     loss_lmmd = lambda_mmd_eff * loss_lmmd
 
                 else:
@@ -582,7 +506,7 @@ def train_adda_infomax_lmmd(
             f"LMMD:{mmd_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"FT(total):{ft_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"D-acc:{d_acc_sum / max(1, d_cnt):.4f} | "
-            f"cov:{cov:.2%} margin:{margin_mean:.3f} | loss_lmmd:{float(loss_lmmd):.4f}"
+            f"cov:{cov:.2%} | lambda_coral_eff:{lambda_mmd_eff:.4f}"
         )
 
         print("[INFO] Evaluating on target test set...")
@@ -598,56 +522,51 @@ if __name__ == "__main__":
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
-    num_epochs = cfg['num_epochs']
+    num_epochs = 20
 
-    files = [194]
-    # files = [185, 188, 191, 194, 197]
-    for file in files:
-        src_path = '../datasets/source/train/DC_T197_RP.txt'
-        tgt_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        tgt_test = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
+    src_path = '../datasets/source/train/DC_T197_RP.txt'
+    tgt_path = '../datasets/target/train/HC_T191_RP.txt'
+    tgt_test = '../datasets/target/test/HC_T191_RP.txt'
 
-        print(f"[INFO] Loading HC_T{file} ...")
+    for run_id in range(5):
+        print(f"\n========== RUN {run_id} (ADDA) ==========")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        for run_id in range(5):
-            print(f"\n========== RUN {run_id} (ADDA) ==========")
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # —— 阶段1：建立并训练源域模型 Fs + C （复用 Flexible_DANN 但不使用其域头/GRL）
+        src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
+                                  cnn_act='leakrelu', num_classes=10).to(device)
 
-            # —— 阶段1：建立并训练源域模型 Fs + C （复用 Flexible_DANN 但不使用其域头/GRL）
-            src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                                      cnn_act='leakrelu', num_classes=10).to(device)
+        src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
+        optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
+        scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs//2, eta_min=lr * 0.1)
+        src_cls = nn.CrossEntropyLoss()
 
-            src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-            optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
-            scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs//2, eta_min=lr * 0.1)
-            src_cls = nn.CrossEntropyLoss()
+        print("[INFO] SRC pretrain (Fs + C) ...")
+        pretrain_source_classifier(src_model, src_loader, tgt_loader,optimizer_src, src_cls, device,
+                                   num_epochs=max(1, num_epochs//4), scheduler=scheduler_src)
 
-            print("[INFO] SRC pretrain (Fs + C) ...")
-            pretrain_source_classifier(src_model, src_loader, tgt_loader,optimizer_src,lr,wd, src_cls, device,
-                                       num_epochs=max(1, num_epochs//2), scheduler=scheduler_src)
+        # —— 阶段2：初始化目标编码器 Ft（从 Fs 拷贝），训练 ADDA（+可选IM/LMMD）
+        tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
+                                  cnn_act='leakrelu', num_classes=10).to(device)
+        copy_encoder_params(src_model, tgt_model, device)
 
-            # —— 阶段2：初始化目标编码器 Ft（从 Fs 拷贝），训练 ADDA（+可选IM/LMMD）
-            tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                                      cnn_act='leakrelu', num_classes=10).to(device)
-            copy_encoder_params(src_model, tgt_model, device)
-
-            print("[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...")
-            tgt_model = train_adda_infomax_lmmd(
-                src_model, tgt_model, src_loader, tgt_loader, device,
-                num_epochs=num_epochs, num_classes=10,batch_size=bs,
-                # 判别器/优化器
-                lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,d_steps =1 ,ft_steps =2 ,
-                # InfoMax
-                im_T=1.0, im_weight=0.6, im_marg_w=1.0,
-                # LMMD
-                lmmd_start_epoch=5, pseudo_thresh=0.95, T_lmmd=2
-            )
+        print("[INFO] ADDA stage (Ft vs D) + optional InfoMax/LMMD ...")
+        tgt_model = train_adda_infomax_lmmd(
+            src_model, tgt_model, src_loader, tgt_loader, device,
+            num_epochs=num_epochs, num_classes=10,batch_size=bs,
+            # 判别器/优化器
+            lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,d_steps =1 ,ft_steps =2 ,
+            # InfoMax
+            im_T=1.0, im_weight=0.8, im_marg_w=1.0,
+            # LMMD
+            lmmd_start_epoch=5, pseudo_thresh=0.95, T_lmmd=2
+        )
 
 
-            print("[INFO] Evaluating on target test set...")
-            test_ds = PKLDataset(tgt_test)
-            test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-            general_test_model(tgt_model, src_cls, test_loader, device)
+        print("[INFO] Evaluating on target test set...")
+        test_ds = PKLDataset(tgt_test)
+        test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
+        general_test_model(tgt_model, src_cls, test_loader, device)
 
-            del src_model, tgt_model, optimizer_src, scheduler_src, src_loader, tgt_loader, test_loader, test_ds
-            if torch.cuda.is_available(): torch.cuda.empty_cache()
+        del src_model, tgt_model, optimizer_src, scheduler_src, src_loader, tgt_loader, test_loader, test_ds
+        if torch.cuda.is_available(): torch.cuda.empty_cache()

@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
-from models.Flexible_CNN import Flexible_CNN
+from models_neu.Flexible_CNN import Flexible_CNN
 from PKLDataset import PKLDataset
 from torch.utils.data import DataLoader
 import yaml
@@ -10,8 +10,8 @@ from tqdm import tqdm
 
 
 # 加载配置
-with open("../configs/default.yaml", 'r') as f:
-    config = yaml.safe_load(f)['DANN_LMMD_INFO']
+with open("../configs/default2.yaml", 'r') as f:
+    config = yaml.safe_load(f)['Baseline']
 
 batch_size = config['batch_size']
 num_layers = config['num_layers']
@@ -20,11 +20,10 @@ start_channels = config['start_channels']
 
 # 设置设备
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-for i in range(10):
+for i in range(1):
     model_path = f'model/run_{i}/best_model.pth'
     print(f"run{i}start")
     file = ['../datasets/HC_T197_RP.txt','../datasets/HC_T194_RP.txt','../datasets/HC_T191_RP.txt','../datasets/HC_T188_RP.txt','../datasets/HC_T185_RP.txt']
-
     for item in file:
         # 加载测试数据
         test_dataset = PKLDataset(item)

@@ -18,10 +18,97 @@ def set_seed(seed=42):
 
 
 # Baseline weight of LMMD (multiplied by quality gate to get final weight)
-def mmd_lambda(epoch, num_epochs, max_lambda=3e-1, start_epoch=5):
+def sup_lambda(epoch, num_epochs, max_lambda=3e-1, start_epoch=5):
     if epoch < start_epoch: return 0.0
     p = (epoch-start_epoch) / max(1, (num_epochs-1-start_epoch))
     return (2.0 / (1.0 + np.exp(-10 * p)) - 1.0) * max_lambda
+
+# 伪标签 + 统计
+@torch.no_grad()
+def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1.0):
+    """
+        Use the current model to perform "offline pseudo-annotation" on unlabeled data in the target domain, and calculate coverage and average quality.
+
+        This function calculates the classification probability (with an optional temperature T) for each target domain sample.
+        Only samples with a top-1 probability conf >= threshold are retained as pseudo-labeled samples.
+        The difference in the (top-1 - top-2) probability is used as a "sample quality weight" (margin),
+        to facilitate downweighting of uncertain samples in subsequent class-conditional alignment (such as LMMD) or distillation.
+
+        This function is executed with `torch.no_grad()` + `model.eval()`, and no gradients or parameter updates are generated.
+
+        Parameters
+        ----------
+        model : torch.nn.Module
+        A trained (or training) classification model. Its `forward(x, grl=False)` should return
+        `(logits, domain_logits, features)`. This function only uses `logits`.
+        Note: GRL is disabled here with `grl=False` The reverse effect of `` (for semantic clarity only; no reverse effect with `no_grad`).
+
+        target_loader : torch.utils.data.DataLoader
+        DataLoader for the target domain's unlabeled data. `__getitem__` should return `x` or `(x, ...)`,
+        where only the first element is used as input.
+
+        device : torch.device
+        The inference device (e.g., `torch.device("cuda")` or `torch.device("cpu")`).
+
+        threshold : float, default=0.95
+        The pseudo-label retention threshold: retain samples if their top-1 probability `conf` satisfies `conf >= threshold`.
+
+        A higher threshold generally results in lower coverage (retention fraction) but higher quality.
+
+        T : float, default=1.0
+        Softmax temperature. Logits are divided by T before softmaxing:
+
+        - T > 1: probabilities are flatter (decreasing confidence, generally lower coverage);
+
+        - T < 1: Probability is more "sharp" (increasing confidence generally leads to higher coverage).
+
+        Returns
+        ------
+        x_cat : torch.Tensor
+        The concatenated tensor of target samples that pass the threshold, located in **CPU**.
+        y_cat : torch.Tensor
+        The corresponding "hard pseudo-label" (`argmax`), dtype `torch.long`, located in **CPU**.
+        w_cat : torch.Tensor
+        Sample-level weight (quality), using `margin = p_top1 - p_top2`, located in **CPU**.
+        stats : Dict[str, float]
+        Statistics dictionary, containing:
+        - "kept" : int, the number of samples `N_keep` retained in this round;
+        - "total" : int, the total number of target domain samples;
+        - "coverage" : float, coverage = `N_keep / total`;
+        - "margin_mean" : float, the average margin of the retained samples, a measure of the overall pseudo-label quality.
+
+    """
+
+    model.eval()
+    xs, ys, ws = [], [], []
+    margins = []
+    total = 0
+    for batch in target_loader:
+        x = batch[0] if isinstance(batch, (tuple, list)) else batch
+        total += x.size(0)
+        x_dev = x.to(device)
+        logits, _ , _= model(x_dev)
+        prob = F.softmax(logits / T, dim=1)
+        top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
+        conf, _ = torch.max(prob, dim=1)            # [B]
+        margin = top2[:, 0] - top2[:, 1]            # [B]
+        keep = conf >= threshold
+        if keep.any():
+            xs.append(x_dev[keep].detach().cpu())
+            ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
+            ws.append(margin[keep].detach().cpu())
+            margins.append(margin[keep].detach().cpu())
+    if len(xs) == 0:
+        x_cat = torch.empty(0); y_cat = torch.empty(0, dtype=torch.long); w_cat = torch.empty(0)
+        cov = 0.0; margin_mean = 0.0
+    else:
+        x_cat = torch.cat(xs, dim=0)
+        y_cat = torch.cat(ys, dim=0)
+        w_cat = torch.cat(ws, dim=0)
+        cov = float(x_cat.size(0)) / max(1, total)
+        margin_mean = float(torch.cat(margins).mean())
+    return x_cat, y_cat, w_cat, {"kept": int(x_cat.size(0)), "total": int(total),
+                                 "coverage": cov, "margin_mean": margin_mean}
 
 # ------------------ InfoMax (target domain) ------------------
 @torch.no_grad()
@@ -78,71 +165,62 @@ def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
 
 
 
-#  Weighted Class Conditional MMD (Multi-core RBF)
-def _pairwise_sq_dists(a, b):
-    # a: [m,d], b: [n,d]
-    a2 = (a*a).sum(dim=1, keepdim=True)       # [m,1]
-    b2 = (b*b).sum(dim=1, keepdim=True).t()   # [1,n]
-    return a2 + b2 - 2 * (a @ b.t())
+class Prototypes(nn.Module):
+    """
+    维护每个类别的原型向量（动量更新）。
+    - proto: [C, d]，每类一个 d 维中心
+    - momentum m ∈ [0,1): 越大表示更新更平滑
+    """
+    def __init__(self, num_classes, feat_dim, momentum=0.95):
+        super().__init__()
+        self.register_buffer('proto', torch.zeros(num_classes, feat_dim))
+        self.m = float(momentum)
 
-def _mk_kernel(a, b, gammas):
-    d2 = _pairwise_sq_dists(a, b).clamp_min(0)
-    k = 0.0
-    M = max(1, len(gammas))
-    for g in gammas:
-        k = k + torch.exp(-float(g) * d2)
-    return k / M
+    @torch.no_grad()
+    def update(self, feats, labels, weights=None):
+        """
+        使用当前批（通常是目标伪标样本）的特征更新原型。
+        feats:   [N, d]
+        labels:  [N]
+        weights: [N] or None （可用置信度）
+        """
+        if feats.numel() == 0:
+            return
+        for c in labels.unique():
+            mask = (labels == c)
+            if mask.sum() == 0:
+                continue
+            if weights is None:
+                vec = feats[mask].mean(dim=0)
+            else:
+                w = weights[mask]
+                vec = (w.unsqueeze(1) * feats[mask]).sum(dim=0) / (w.sum().clamp_min(1e-8))
+            self.proto[c] = self.m * self.proto[c] + (1.0 - self.m) * vec
 
-def _weighted_mean_kernel(K, w_row, w_col):
-    # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))
-    num = (w_row.view(1,-1) @ K @ w_col.view(-1,1)).squeeze()
-    den = (w_row.sum() * w_col.sum()).clamp_min(1e-8)
-    return num / den
+    def supcon_logits(self, feats, tau=0.1):
+        """
+        计算与原型的相似度 logits:  (normalize(f) @ normalize(proto)^T) / τ
+        feats: [N, d]
+        return: [N, C]
+        """
+        f = F.normalize(feats, dim=1, eps=1e-8)
+        p = F.normalize(self.proto, dim=1, eps=1e-8)
+        logits = f @ p.t()
+        if tau is not None and tau > 0:
+            logits = logits / float(tau)
+        return logits
 
-def mmd2_weighted(a, b, w_a=None, w_b=None, gammas=(0.5,1,2,4,8)):
-    # MMD^2 = E_aa k + E_bb k - 2 E_ab k  （weight）
-    if w_a is None: w_a = torch.ones(a.size(0), device=a.device)
-    if w_b is None: w_b = torch.ones(b.size(0), device=b.device)
-    Kaa = _mk_kernel(a, a, gammas)
-    Kbb = _mk_kernel(b, b, gammas)
-    Kab = _mk_kernel(a, b, gammas)
-    e_aa = _weighted_mean_kernel(Kaa, w_a, w_a)
-    e_bb = _weighted_mean_kernel(Kbb, w_b, w_b)
-    e_ab = _weighted_mean_kernel(Kab, w_a, w_b)
-    return (e_aa + e_bb - 2*e_ab).clamp_min(0.0)
-
-@torch.no_grad()
-def suggest_mmd_gammas(x_src, x_tgt, k=1024, scales=(0.25,0.5,1,2,4)):
-    x = torch.cat([x_src.detach(), x_tgt.detach()], dim=0)
-    n = x.size(0)
-    if k is None or k >= n:
-        xi, xj = x.unsqueeze(1), x.unsqueeze(0)
-        d2 = (xi - xj).pow(2).sum(-1).flatten()
-    else:
-        i = torch.randint(0, n, (k,), device=x.device)
-        j = torch.randint(0, n, (k,), device=x.device)
-        d2 = (x[i]-x[j]).pow(2).sum(-1)
-    m = d2.clamp_min(1e-12).median()
-    g0 = (1.0 / (2.0 * m)).item()
-    return [s * g0 for s in scales]
-
-def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
-                                  num_classes, gammas=(0.5,1,2,4,8),
-                                  min_count_per_class=2):
-    total = feat_src.new_tensor(0.0)
-    wsum = 0.0
-    for c in range(num_classes):
-        ms = (y_src == c)
-        mt = (y_tgt == c)
-        ns, nt = int(ms.sum()), int(mt.sum())
-        if ns >= min_count_per_class and nt >= min_count_per_class:
-            w_c = w_tgt[mt]
-            mmd_c = mmd2_weighted(feat_src[ms], feat_tgt[mt], None, w_c, gammas)
-            w = float(min(ns, nt))
-            total = total + mmd_c * w
-            wsum += w
-    return total / wsum if wsum > 0 else total
-
+def classwise_supcon_loss(feat_tgt, y_tgt, proto_module, tau=0.1, weight=1.0):
+    """
+    用于训练步的监督对比损失（目标伪标签 vs 原型）。
+    - 只对目标样本/伪标签计算；源域不需要。
+    - 返回一个标量 loss，反向只改特征（原型用 EMA 更新，不反传）。
+    """
+    if feat_tgt.numel() == 0:
+        return feat_tgt.new_tensor(0.0)
+    logits = proto_module.supcon_logits(feat_tgt, tau=tau)   # [N, C]
+    loss = F.cross_entropy(logits, y_tgt) * float(weight)
+    return loss
 
 
 
@@ -159,7 +237,6 @@ def copy_encoder_params(src_model, tgt_model, device):
 
 
 # ===== 新增：阶段1 —— 仅用源域训练 (F_s + C) =====
-# ===== 新增：阶段1 —— 仅用源域训练 (F_s + C) =====
 def pretrain_source_classifier(
     src_model,
     source_loader,
@@ -168,36 +245,49 @@ def pretrain_source_classifier(
     criterion_cls,
     device,
     num_epochs=5,
-    scheduler=None
+    scheduler=None,
+    extra_target_pass=True  # 是否在每个 epoch 末额外跑一遍 target-only InfoMax
 ):
+    """
+    - 源域：交叉熵 -> 更新 feature_extractor + classifier
+    - 目标域：InfoMax 仅更新 classifier（对 feature_extractor 用 eval()+no_grad 提特征）
+    - 可选：epoch 末再做一遍 target-only InfoMax，扩大目标覆盖
+    """
     src_model.train()
     tgt_iter = iter(target_loader)
 
     for epoch in range(num_epochs):
-        tot_loss, tot_ce, tot_im, tot_n = 0.0, 0.0, 0.0, 0
+        tot_loss = tot_ce = tot_im = tot_n = 0.0
 
+        # ===== 源域 CE + 目标域 InfoMax（只训分类头）的混合小循环 =====
         for xb, yb in source_loader:
             xb, yb = xb.to(device), yb.to(device)
 
-            # ---- 前向：source 用于 CE，target 用于 InfoMax ----
+            # 1) 源域监督 CE：正常 forward（允许更新提取器与分类头）
             logits_s, _, _ = src_model(xb)
             ce = criterion_cls(logits_s, yb)
 
-            # —— 目标批次只作用到“分类头” ——
+            # 2) 目标域 InfoMax：只让分类头收到梯度
             try:
                 batch_t = next(tgt_iter)
             except StopIteration:
                 tgt_iter = iter(target_loader)
                 batch_t = next(tgt_iter)
-            # 兼容 target_loader 返回 (x,) 或 (x, dummy_y)
             x_t = batch_t[0] if isinstance(batch_t, (list, tuple)) else batch_t
             x_t = x_t.to(device)
-            with torch.no_grad():
-                _, feat_t, _ = src_model(x_t)  # 切断到 encoder 的梯度 & 不更新 BN 统计
-            logits_t_head = src_model.classifier(feat_t)  # 只经过分类头，可反传到分类头
-            L_im, Hc, Hm = infomax_loss_from_logits(logits_t_head)
 
-            loss = ce + 0.8 * L_im
+            # 用 feature_extractor 提取 target 特征；不更新其参数与 BN 统计
+            was_train = src_model.feature_extractor.training
+            src_model.feature_extractor.eval()
+            with torch.no_grad():
+                feat_t = src_model.feature_extractor(x_t)
+            src_model.feature_extractor.train(was_train)
+
+            # 只通过分类头（classifier 的输入就是 feature_dim）
+            logits_t_head = src_model.classifier(feat_t)
+            L_im, Hc, Hm = infomax_loss_from_logits(logits_t_head,T = 1)
+
+            loss = ce + 0.5 * L_im
 
             optimizer.zero_grad()
             loss.backward()
@@ -209,9 +299,28 @@ def pretrain_source_classifier(
             tot_im   += L_im.item() * bs
             tot_n    += bs
 
+        # ===== 额外 target-only InfoMax（只训分类头；可选）=====
+        if extra_target_pass and epoch == num_epochs - 1:
+            for batch_t in target_loader:
+                x_t = batch_t[0] if isinstance(batch_t, (list, tuple)) else batch_t
+                x_t = x_t.to(device)
+
+                was_train = src_model.feature_extractor.training
+                src_model.feature_extractor.eval()
+                with torch.no_grad():
+                    feat_t = src_model.feature_extractor(x_t)  # <<<<<< 同样先过 extractor
+                src_model.feature_extractor.train(was_train)
+
+                logits_t_head = src_model.classifier(feat_t)
+                L_im_extra, _, _ = infomax_loss_from_logits(logits_t_head,T = 1)
+
+                optimizer.zero_grad()
+                L_im_extra.backward()
+                optimizer.step()
+
         print(f"[SRC PRETRAIN+IM] Epoch {epoch+1}/{num_epochs} | "
               f"Loss:{tot_loss/max(1,tot_n):.4f} | CE:{tot_ce/max(1,tot_n):.4f} | "
-              f"IM:{tot_im/max(1,tot_n):.4f} ")
+              f"IM:{tot_im/max(1,tot_n):.4f}")
 
         if scheduler is not None:
             scheduler.step()
@@ -244,34 +353,37 @@ def train_adda_infomax_lmmd(
     with torch.no_grad():
         xb_s, yb_s = next(iter(source_loader))
         xb_s = xb_s.to(device)
-        _ , feat_s, _= src_model(xb_s)
+        _ , feat_s, feat_reduce= src_model(xb_s)
         feat_dim = feat_s.size(1)
+        feat_reduce_dim = feat_reduce.size(1)
     D = DomainClassifier(feature_dim=feat_dim).to(device)
     opt_d = torch.optim.Adam(D.parameters(), lr=lr_d, weight_decay=weight_decay)
     c_dom = nn.CrossEntropyLoss().to(device)
+    protos = Prototypes(num_classes=num_classes, feat_dim=feat_reduce_dim, momentum=0.95).to(device)
+    sup_tau = 0.1
 
     # 4) 训练循环（交替优化 D 和 F_t）
     for epoch in range(num_epochs):
         # 准备伪标签以便 LMMD
         pl_loader = None
         pseudo_x = pseudo_y = pseudo_w = None
-        cov = 0.0
+        cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
-            pseudo_x, pseudo_y, pseudo_w, stats = adda_pseudo_then_kmeans_select(
-                tgt_model, pseudo_loader, device, num_classes,
-                epoch=epoch,
-                T=1.0,
-                conf_sched=(20, 30, 0.95, 0.90),  # 置信度阈值从 0.95 平滑降到 0.90
-                tau_pur=0.80, dist_q=0.80, min_cluster_size=10,
-                per_class_cap=None,  # 需要类平衡时，例如每类最多 500：per_class_cap=500
+            pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
+                tgt_model, target_loader, device, threshold=0.90, T=2
             )
-            kept = stats["num_clusters_valid"]
-            cov = stats["cov_after_cluster"]
-            zahl = stats["num_selected"]
-            if zahl > 0:
+            cov, margin_mean = stats["coverage"], stats["margin_mean"]
+            if pseudo_x.numel() > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
-        lambda_mmd_eff= mmd_lambda(epoch, num_epochs, max_lambda=25e-2, start_epoch=lmmd_start_epoch)
+        lambda_sup_base = sup_lambda(epoch, num_epochs, max_lambda=25e-2, start_epoch=lmmd_start_epoch)
+
+        def _lin(x, lo, hi):
+            return float(min(max((x - lo) / max(1e-6, hi - lo), 0.0), 1.0))
+        q_margin = _lin(margin_mean, 0.05, 0.50)
+        q_cov = math.sqrt(max(0.0, cov))  # concave
+        q = q_margin * q_cov
+        lambda_sub_eff = lambda_sup_base * q
 
         it_src, it_tgt = iter(source_loader), iter(target_loader)
         it_pl = iter(pl_loader) if pl_loader is not None else None
@@ -287,10 +399,10 @@ def train_adda_infomax_lmmd(
         D.train()
 
         # 统计
-        d_loss_sum = g_loss_sum = im_loss_sum = mmd_loss_sum = ft_loss_sum = 0.0
+        d_loss_sum = g_loss_sum = im_loss_sum = sup_loss_sum = ft_loss_sum = 0.0
         d_acc_sum = 0.0; d_cnt = 0
 
-        for _ in range(steps):
+        for _ in range(steps//2):
             try: xs, ys = next(it_src)
             except StopIteration:
                 it_src = iter(source_loader); xs, ys = next(it_src)
@@ -305,8 +417,6 @@ def train_adda_infomax_lmmd(
                 with torch.no_grad():
                     _, f_s, _= src_model(xs)       # [B, d]
                     _, f_t, _= tgt_model(xt)       # [B, d]
-                    f_s = F.normalize(f_s, dim=1)  # 关键：L2 归一化
-                    f_t = F.normalize(f_t, dim=1)
                 d_in  = torch.cat([f_s, f_t], dim=0)
                 d_lab = torch.cat([torch.ones(f_s.size(0)), torch.zeros(f_t.size(0))], dim=0).long().to(device)  # 1=source,0=target
                 d_out = D(d_in)
@@ -336,47 +446,53 @@ def train_adda_infomax_lmmd(
                 xt_ft = xt_ft.to(device)
                 _, f_t, _  = tgt_model(xt_ft)
                 fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # 让 D 预测成“source” -1
-                f_t_n = F.normalize(f_t, dim=1)
-                g_out = D(f_t_n)
+                g_out = D(f_t)
                 loss_g = c_dom(g_out, fool_lab)
 
                 # InfoMax 正则 —— 更自信但不塌缩
+
+
                 logits_t = src_model.classifier(f_t)
                 loss_im, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=im_T, marg_weight=im_marg_w)
                 loss_im = im_weight * loss_im
 
 
                 # LMMD：使用源真标签与目标伪标签做类条件对齐
+
                 if it_pl is not None:
                     try: xpl, ypl, wpl = next(it_pl)
                     except StopIteration:
                         it_pl = iter(pl_loader); xpl, ypl, wpl = next(it_pl)
                     xpl, ypl, wpl = xpl.to(device), ypl.to(device), wpl.to(device)
-                    with torch.no_grad():
-                        _, _,f_s_n = src_model(xs)
                     _, _,f_t_pl = tgt_model(xpl)
-                    gammas = suggest_mmd_gammas(f_s_n, f_t_pl, k=1024)
-                    loss_lmmd = classwise_mmd_biased_weighted(
-                        f_s_n, ys, f_t_pl, ypl, wpl,
-                        num_classes=num_classes, gammas=gammas,
-                        min_count_per_class=3
+                    # SupCon 原型对齐损失（替代 LMMD）
+                    loss_sup = classwise_supcon_loss(
+                        feat_tgt=f_t_pl, y_tgt=ypl, proto_module=protos, tau=sup_tau, weight=lambda_sub_eff
                     )
-                    loss_lmmd = lambda_mmd_eff * loss_lmmd
                 else:
-                    loss_lmmd = f_t.new_tensor(0.0)
+                    loss_sup = f_t.new_tensor(0.0)
 
 
-                loss_ft = loss_g + loss_im + loss_lmmd
+                loss_ft = loss_g + loss_im + loss_sup
                 opt_ft.zero_grad()
                 loss_ft.backward()
                 opt_ft.step()
+                if it_pl is not None:
+                    with torch.no_grad():
+                        if wpl.numel() > 20:
+                            cutoff = torch.quantile(wpl, 0.95).item()
+                            wpl_clip = torch.clamp(wpl, max=cutoff)
+                        else:
+                            wpl_clip = wpl
+                        protos.update(f_t_pl.detach(), ypl.detach(), weights=wpl_clip.detach())
+
 
                 def to_scalar(x):
                     return x.detach().item() if torch.is_tensor(x) else float(x)
 
                 g_loss_sum += to_scalar(loss_g)
                 im_loss_sum += to_scalar(loss_im)
-                mmd_loss_sum += to_scalar(loss_lmmd)
+                sup_loss_sum += to_scalar(loss_sup)
                 ft_loss_sum += to_scalar(loss_ft)
             for p in D.parameters():
                 p.requires_grad = True
@@ -389,11 +505,11 @@ def train_adda_infomax_lmmd(
             f"D:{d_loss_sum / max(1, steps * d_steps):.4f} | "
             f"G(adver):{g_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"IM:{im_loss_sum / max(1, steps * ft_steps):.4f} | "
-            f"LMMD:{mmd_loss_sum / max(1, steps * ft_steps):.4f} | "
+            f"SUP:{sup_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"FT(total):{ft_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"D-acc:{d_acc_sum / max(1, d_cnt):.4f} | "
-            f"cov:{cov:.2%}  | loss_lmmd:{float(lambda_mmd_eff):.4f} |"
-            f"clusters:{kept}"
+            f"cov:{cov:.2%} margin:{margin_mean:.3f} | lambda_sub_eff:{float(lambda_sub_eff):.4f} |"
+
         )
 
         print("[INFO] Evaluating on target test set...")
@@ -409,7 +525,7 @@ if __name__ == "__main__":
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
-    num_epochs = 10
+    num_epochs = 20
 
     files = [194]
     # files = [185, 188, 191, 194, 197]
@@ -435,8 +551,8 @@ if __name__ == "__main__":
             src_cls = nn.CrossEntropyLoss()
 
             print("[INFO] SRC pretrain (Fs + C) ...")
-            pretrain_source_classifier(src_model, src_loader, optimizer_src, src_cls, device,
-                                       num_epochs=max(1, num_epochs//2), scheduler=scheduler_src)
+            pretrain_source_classifier(src_model, src_loader, tgt_loader, optimizer_src, src_cls, device,
+                                       num_epochs=max(1, num_epochs // 2), scheduler=scheduler_src)
 
             # —— 阶段2：初始化目标编码器 Ft（从 Fs 拷贝），训练 ADDA（+可选IM/LMMD）
             tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,

@@ -7,21 +7,24 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from models.Flexible_ADDA import Flexible_ADDA, freeze, unfreeze, DomainClassifier
 from PKLDataset import PKLDataset
-from models.get_no_label_dataloader import get_target_loader
+from models.get_no_label_dataloader import get_dataloaders
 from utils.general_train_and_test import general_test_model
 
-# ========== 基础工具 ==========
-def set_seed(seed=42):
-    torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
-    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
+def adam_param_groups(model, weight_decay):
+    """对 BN/偏置不做 weight decay"""
+    decay, no_decay = [], []
+    for n, p in model.named_parameters():
+        if not p.requires_grad: continue
+        if p.ndim == 1 or n.endswith(".bias"):
+            no_decay.append(p)
+        else:
+            decay.append(p)
+    return [
+        {"params": decay, "weight_decay": weight_decay},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
 
-def get_dataloaders(source_path, target_path, batch_size):
-    src_ds = PKLDataset(txt_path=source_path)
-    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
-    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
-    return src_loader, tgt_loader
-
-# ========== 阶段1：源域监督预训练 (Fs + C) ==========
+#  阶段1：源域监督预训练 (Fs + C)
 def pretrain_source_classifier(src_model, source_loader, optimizer, criterion_cls, device, num_epochs=5, scheduler=None):
     src_model.train()
     for epoch in range(num_epochs):
@@ -88,7 +91,7 @@ def train_adda_pure(
             if isinstance(xt, (tuple, list)): xt = xt[0]
             xs, ys, xt = xs.to(device), ys.to(device), xt.to(device)
 
-            # ------- (A) 训练 D：分辨源/目标特征 -------
+            # (A) 训练 D：分辨源/目标特征
             for _k in range(d_steps):
                 with torch.no_grad():
                     _, f_s, _ = src_model(xs)   # 源特征（冻结）
@@ -156,7 +159,7 @@ if __name__ == "__main__":
 
         # 构建源模型 & 数据
         src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                                  cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
+                                  cnn_act='leakrelu', num_classes=10).to(device)
         src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
         optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
         scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs, eta_min=lr*0.1)
@@ -168,7 +171,7 @@ if __name__ == "__main__":
 
         # 目标模型从源模型拷贝初始化
         tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
-                                  cnn_act='leakrelu', num_classes=10, lambda_=0.0).to(device)
+                                  cnn_act='leakrelu', num_classes=10).to(device)
         tgt_model.load_state_dict(copy.deepcopy(src_model.state_dict()))
         tgt_model.to(device)
 
@@ -177,7 +180,7 @@ if __name__ == "__main__":
             src_model, tgt_model, src_loader, tgt_loader, device,
             num_epochs=num_epochs,
             lr_ft=lr, lr_d=lr*0.5, weight_decay=wd,
-            d_steps=1, ft_steps=3
+            d_steps=1, ft_steps=2
         )
 
         # 最终评测（目标测试集）
