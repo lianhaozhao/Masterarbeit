@@ -2,9 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-# ====================
-# 1) 数据
-# ====================
+
 # data = {
 #     "Method": [
 #         "DANN", "DANN_CORAL", "DANN_MMD",
@@ -30,13 +28,11 @@ data = {
 df = pd.DataFrame(data)
 df.set_index("Method", inplace=True)
 
-# ====================
-# 2) 绘制更美观的多柱状图
-# ====================
-colors = plt.cm.tab20.colors  # 使用 tab20 配色方案
+
+colors = plt.cm.tab20.colors
 ax = df.T.plot(kind="bar", figsize=(10,6), color=colors[:len(df)])
 
-# 添加数值标注
+
 for c in ax.containers:
     ax.bar_label(c, fmt="%.2f", fontsize=8, padding=2, rotation=90)
 
@@ -47,7 +43,7 @@ ax.spines['left'].set_linewidth(1.2)
 ax.spines['bottom'].set_linewidth(1.2)
 plt.axhline(0, color="black", linewidth=1)
 
-# 标题和标签（德语）
+# 标题和标签
 # plt.title("Differenz der Methoden zum Baseline (pro HC-Gruppe)", fontsize=14, weight="bold")
 # plt.ylabel("Differenz (vs. Baseline)", fontsize=12)
 plt.title("Durchschnittliche Genauigkeit", fontsize=14, weight="bold")
@@ -56,7 +52,6 @@ plt.xlabel("HC-Gruppe", fontsize=12)
 plt.xticks(rotation=0, fontsize=11)
 plt.yticks(fontsize=11)
 
-# 图例放在下方横排
 plt.legend(title="Methode", bbox_to_anchor=(0.5, -0.15), loc="upper center", ncol=3, fontsize=10)
 
 plt.tight_layout()
