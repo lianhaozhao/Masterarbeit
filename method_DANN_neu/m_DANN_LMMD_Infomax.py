@@ -6,27 +6,38 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from models.Flexible_DANN_pseudo_MMD import Flexible_DANN
+from models.Flexible_DANN_LMMD import Flexible_DANN
 from PKLDataset import PKLDataset
-from models.get_no_label_dataloader import get_dataloaders
+from models.get_no_label_dataloader import get_dataloaders, get_pseudo_dataloaders
+from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
 from utils.general_train_and_test import general_test_model
-from models.generate_pseudo_labels_with_LMMD import pseudo_then_kmeans_select
+from models.MMD import classwise_mmd_biased_weighted,suggest_mmd_gammas
 
-def set_seed(seed=42):
-    torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
-    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
-
+def adam_param_groups(model, weight_decay):
+    """对 BN/偏置不做 weight decay"""
+    decay, no_decay = [], []
+    for n, p in model.named_parameters():
+        if not p.requires_grad: continue
+        if p.ndim == 1 or n.endswith(".bias"):
+            no_decay.append(p)
+        else:
+            decay.append(p)
+    return [
+        {"params": decay, "weight_decay": weight_decay},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
 
 # DANN Lambda Scheduling (GRL only)
 def dann_lambda(epoch, num_epochs, max_lambda=0.5):
     p = epoch / max(1, num_epochs-1)
-    return (2.0 / (1.0 + np.exp(-7 * p)) - 1.0) * max_lambda
-
-# Baseline weight of LMMD (multiplied by quality gate to get final weight)
-def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
-    if epoch < start_epoch: return 0.0
-    p = (epoch-start_epoch) / max(1, (num_epochs-1-start_epoch))
     return (2.0 / (1.0 + np.exp(-5 * p)) - 1.0) * max_lambda
+
+# Baseline weight of MMD (multiplied by quality gate to get final weight)
+def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
+    if epoch < start_epoch:
+        return 0.0
+    p = (epoch - start_epoch) / max(1, (num_epochs - 1 - start_epoch))
+    return (2.0 / (1.0 + np.exp(-3 * p)) - 1.0) * max_lambda
 
 # ------------------ InfoMax (target domain) ------------------
 @torch.no_grad()
@@ -81,168 +92,19 @@ def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
     h_marg = entropy_marginal(p)  # Schätzung der marginalen Entropie
     return h_cond - marg_weight * h_marg, h_cond.detach(), h_marg.detach()
 
-# 伪标签 + 统计
-@torch.no_grad()
-def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1.0):
-    """
-        Use the current model to perform "offline pseudo-annotation" on unlabeled data in the target domain, and calculate coverage and average quality.
-
-        This function calculates the classification probability (with an optional temperature T) for each target domain sample.
-        Only samples with a top-1 probability conf >= threshold are retained as pseudo-labeled samples.
-        The difference in the (top-1 - top-2) probability is used as a "sample quality weight" (margin),
-        to facilitate downweighting of uncertain samples in subsequent class-conditional alignment (such as LMMD) or distillation.
-
-        This function is executed with `torch.no_grad()` + `model.eval()`, and no gradients or parameter updates are generated.
-
-        Parameters
-        ----------
-        model : torch.nn.Module
-        A trained (or training) classification model. Its `forward(x, grl=False)` should return
-        `(logits, domain_logits, features)`. This function only uses `logits`.
-        Note: GRL is disabled here with `grl=False` The reverse effect of `` (for semantic clarity only; no reverse effect with `no_grad`).
-
-        target_loader : torch.utils.data.DataLoader
-        DataLoader for the target domain's unlabeled data. `__getitem__` should return `x` or `(x, ...)`,
-        where only the first element is used as input.
-
-        device : torch.device
-        The inference device (e.g., `torch.device("cuda")` or `torch.device("cpu")`).
-
-        threshold : float, default=0.95
-        The pseudo-label retention threshold: retain samples if their top-1 probability `conf` satisfies `conf >= threshold`.
-
-        A higher threshold generally results in lower coverage (retention fraction) but higher quality.
-
-        T : float, default=1.0
-        Softmax temperature. Logits are divided by T before softmaxing:
-
-        - T > 1: probabilities are flatter (decreasing confidence, generally lower coverage);
-
-        - T < 1: Probability is more "sharp" (increasing confidence generally leads to higher coverage).
-
-        Returns
-        ------
-        x_cat : torch.Tensor
-        The concatenated tensor of target samples that pass the threshold, located in **CPU**.
-        y_cat : torch.Tensor
-        The corresponding "hard pseudo-label" (`argmax`), dtype `torch.long`, located in **CPU**.
-        w_cat : torch.Tensor
-        Sample-level weight (quality), using `margin = p_top1 - p_top2`, located in **CPU**.
-        stats : Dict[str, float]
-        Statistics dictionary, containing:
-        - "kept" : int, the number of samples `N_keep` retained in this round;
-        - "total" : int, the total number of target domain samples;
-        - "coverage" : float, coverage = `N_keep / total`;
-        - "margin_mean" : float, the average margin of the retained samples, a measure of the overall pseudo-label quality.
-
-    """
-
-    model.eval()
-    xs, ys, ws = [], [], []
-    margins = []
-    total = 0
-    for batch in target_loader:
-        x = batch[0] if isinstance(batch, (tuple, list)) else batch
-        total += x.size(0)
-        x_dev = x.to(device)
-        logits, _ , _= model(x_dev)
-        prob = F.softmax(logits / T, dim=1)
-        top2 = torch.topk(prob, k=2, dim=1).values  # [B,2]
-        conf, _ = torch.max(prob, dim=1)            # [B]
-        margin = top2[:, 0] - top2[:, 1]            # [B]
-        keep = conf >= threshold
-        if keep.any():
-            xs.append(x_dev[keep].detach().cpu())
-            ys.append(prob[keep].argmax(dim=1).detach().cpu().long())
-            ws.append(margin[keep].detach().cpu())
-            margins.append(margin[keep].detach().cpu())
-    if len(xs) == 0:
-        x_cat = torch.empty(0); y_cat = torch.empty(0, dtype=torch.long); w_cat = torch.empty(0)
-        cov = 0.0; margin_mean = 0.0
-    else:
-        x_cat = torch.cat(xs, dim=0)
-        y_cat = torch.cat(ys, dim=0)
-        w_cat = torch.cat(ws, dim=0)
-        cov = float(x_cat.size(0)) / max(1, total)
-        margin_mean = float(torch.cat(margins).mean())
-    return x_cat, y_cat, w_cat, {"kept": int(x_cat.size(0)), "total": int(total),
-                                 "coverage": cov, "margin_mean": margin_mean}
-
-#  Weighted Class Conditional MMD (Multi-core RBF)
-def _pairwise_sq_dists(a, b):
-    # a: [m,d], b: [n,d]
-    a2 = (a*a).sum(dim=1, keepdim=True)       # [m,1]
-    b2 = (b*b).sum(dim=1, keepdim=True).t()   # [1,n]
-    return a2 + b2 - 2 * (a @ b.t())
-
-def _mk_kernel(a, b, gammas):
-    d2 = _pairwise_sq_dists(a, b).clamp_min(0)
-    k = 0.0
-    M = max(1, len(gammas))
-    for g in gammas:
-        k = k + torch.exp(-float(g) * d2)
-    return k / M
-
-def _weighted_mean_kernel(K, w_row, w_col):
-    # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))
-    num = (w_row.view(1,-1) @ K @ w_col.view(-1,1)).squeeze()
-    den = (w_row.sum() * w_col.sum()).clamp_min(1e-8)
-    return num / den
-
-def mmd2_weighted(a, b, w_a=None, w_b=None, gammas=(0.5,1,2,4,8)):
-    # MMD^2 = E_aa k + E_bb k - 2 E_ab k  （weight）
-    if w_a is None: w_a = torch.ones(a.size(0), device=a.device)
-    if w_b is None: w_b = torch.ones(b.size(0), device=b.device)
-    Kaa = _mk_kernel(a, a, gammas)
-    Kbb = _mk_kernel(b, b, gammas)
-    Kab = _mk_kernel(a, b, gammas)
-    e_aa = _weighted_mean_kernel(Kaa, w_a, w_a)
-    e_bb = _weighted_mean_kernel(Kbb, w_b, w_b)
-    e_ab = _weighted_mean_kernel(Kab, w_a, w_b)
-    return (e_aa + e_bb - 2*e_ab).clamp_min(0.0)
-@torch.no_grad()
-def suggest_mmd_gammas(x_src, x_tgt, k=1024, scales=(0.25,0.5,1,2,4)):
-    x = torch.cat([x_src.detach(), x_tgt.detach()], dim=0)
-    n = x.size(0)
-    if k is None or k >= n:
-        xi, xj = x.unsqueeze(1), x.unsqueeze(0)
-        d2 = (xi - xj).pow(2).sum(-1).flatten()
-    else:
-        i = torch.randint(0, n, (k,), device=x.device)
-        j = torch.randint(0, n, (k,), device=x.device)
-        d2 = (x[i]-x[j]).pow(2).sum(-1)
-    m = d2.clamp_min(1e-12).median()
-    g0 = (1.0 / (2.0 * m)).item()
-    return [s * g0 for s in scales]
-
-def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
-                                  num_classes, gammas=(0.5,1,2,4,8),
-                                  min_count_per_class=2):
-    total = feat_src.new_tensor(0.0)
-    wsum = 0.0
-    for c in range(num_classes):
-        ms = (y_src == c)
-        mt = (y_tgt == c)
-        ns, nt = int(ms.sum()), int(mt.sum())
-        if ns >= min_count_per_class and nt >= min_count_per_class:
-            w_c = w_tgt[mt]
-            mmd_c = mmd2_weighted(feat_src[ms], feat_tgt[mt], None, w_c, gammas)
-            w = float(min(ns, nt))
-            total = total + mmd_c * w
-            wsum += w
-    return total / wsum if wsum > 0 else total
 
 # Training
 def train_dann_infomax_lmmd(model,
-                            source_loader, target_loader,
+                            source_loader, target_loader,ps_loader,
                             optimizer, criterion_cls, criterion_domain,
                             device, num_epochs=20, num_classes=10,
-                            mmd_gammas=(0.5,1,2,4,8),
+                            pseudo_thresh=0.95,
                             scheduler=None, batch_size=16,
                             # InfoMax
                             im_T=1.0, im_weight=0.5, im_marg_w=1.0,
                             # Gating
-                            lmmd_start_epoch=5,
+                            grl_lambda_max=1,max_lambda = 0.6,
+                            lmmd_start_epoch=5,lmmd_t=1
                             ):
     # Hyperparameters related to early stopping
     W = 4
@@ -257,31 +119,27 @@ def train_dann_infomax_lmmd(model,
     plateau_best_state = None
     patience = 0
 
+
     for epoch in range(num_epochs):
         # 1) Pseudo-labeling
         pl_loader = None
+        cached_gammas = None
         pseudo_x = torch.empty(0)
         pseudo_y = torch.empty(0, dtype=torch.long)
         pseudo_w = torch.empty(0)
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
-            pseudo_x, pseudo_y, pseudo_w, stats = pseudo_then_kmeans_select(
-                            model, target_loader, device, num_classes,
-                            epoch=epoch,
-                            T=1.0,
-                            conf_sched=(20, 30, 0.95, 0.90),    # 置信度阈值从 0.95 平滑降到 0.90
-                            tau_pur=0.80, dist_q=0.80, min_cluster_size=10,
-                            per_class_cap=None,                # 需要类平衡时，例如每类最多 500：per_class_cap=500
-                        )
-            kept = stats["num_clusters_valid"]
-            cov = stats["cov_after_cluster"]
-            zahl = stats["num_selected"]
-            if zahl > 0:
+            pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
+                model, ps_loader, device, threshold=pseudo_thresh, T=lmmd_t
+            )
+            kept, total = stats["kept"], stats["total"]
+            cov, margin_mean = stats["coverage"], stats["margin_mean"]
+            if kept > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
-                pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
+                pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True,drop_last=True)
 
         # 2) Gated LMMD weights
-        lambda_mmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=3e-1, start_epoch=lmmd_start_epoch)
+        lambda_mmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=lmmd_start_epoch)
 
         # 3) epoch training
         model.train()
@@ -292,12 +150,11 @@ def train_dann_infomax_lmmd(model,
         len_pl = len(pl_loader) if pl_loader is not None else 0
         num_iters = max(len_src, len_tgt, len_pl) if len_pl > 0 else max(len_src, len_tgt)
 
-        cls_loss_sum = dom_loss_sum = 0.0
+        cls_loss_sum = dom_loss_sum = mmd_loss_sum = im_loss_sum = 0.0
         tot_loss_sum = 0.0
         tot_target_samples=tot_cls_samples = tot_dom_samples = 0
         dom_correct_src = dom_correct_tgt = 0
         dom_total_src = dom_total_tgt = 0
-        im_loss_sum = mmd_loss_sum = 0.0
 
         for _ in range(num_iters):
             try: src_x, src_y = next(it_src)
@@ -323,7 +180,7 @@ def train_dann_infomax_lmmd(model,
 
             # forword
             # Put λ only into GRL
-            model.lambda_ = float(dann_lambda(epoch, num_epochs))
+            model.lambda_ = float(dann_lambda(epoch, num_epochs, max_lambda=grl_lambda_max))
             cls_out_src, dom_out_src, feat_src = model(src_x, grl=True)
             cls_out_tgt, dom_out_tgt, feat_tgt = model(tgt_x, grl=True)
 
@@ -342,37 +199,35 @@ def train_dann_infomax_lmmd(model,
             loss_im, h_cond, h_marg = infomax_loss_from_logits(cls_out_tgt, T=im_T, marg_weight=im_marg_w)
             loss_im = im_weight * loss_im
 
-            # 4) Class-conditional LMMD (weighted, quality-gated)
-
+            # 3) Class-conditional LMMD (weighted, quality-gated)
             if tgt_pl_x is not None and lambda_mmd_eff > 0:
-                was_training = model.training
-                model.eval()
-                with torch.set_grad_enabled(True):
-                    _, _, feat_src_lmmd = model(src_x, grl=False)
-                    _, _, feat_tgt_lmmd = model(tgt_pl_x, grl=False)
-                model.train(was_training)
-                gammas = suggest_mmd_gammas(feat_src_lmmd, feat_tgt_lmmd, k=1024)
+                _, _, feat_source = model(src_x, grl=False)
+                _, _, feat_tgt_pl = model(tgt_pl_x, grl=False)
+                feat_source = F.normalize(feat_source, dim=1)
+                feat_tgt_pl = F.normalize(feat_tgt_pl, dim=1)
+                if cached_gammas is None:
+                    cached_gammas = suggest_mmd_gammas(feat_source.detach(), feat_tgt_pl.detach())
                 loss_lmmd = classwise_mmd_biased_weighted(
-                    feat_src_lmmd, src_y, feat_tgt_lmmd, tgt_pl_y, tgt_pl_w,
-                    num_classes=num_classes, gammas=gammas,
-                    min_count_per_class=3
+                    feat_source, src_y, feat_tgt_pl, tgt_pl_y, tgt_pl_w,
+                    num_classes=num_classes, gammas=cached_gammas,
+                    min_count_per_class=2
                 )
                 loss_lmmd = lambda_mmd_eff * loss_lmmd
             else:
-                loss_lmmd = torch.tensor(0.0, device=src_x.device)
+                loss_lmmd = src_x.new_tensor(0.0)
 
-            loss = loss_cls * 0.8 + loss_dom + loss_im + loss_lmmd
+            loss = loss_cls + loss_dom + loss_im + loss_lmmd
 
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
 
             # ------ Statistics ------
             cls_loss_sum  += loss_cls.item() * src_x.size(0)
             dom_loss_sum  += loss_dom.item() * (src_x.size(0) + tgt_x.size(0))
             im_loss_sum   += loss_im.item()  * (tgt_x.size(0))
-            if tgt_pl_x is not None and lambda_mmd_eff > 0:
-                mmd_loss_sum  += loss_lmmd.item() * src_x.size(0)
+            mmd_loss_sum  += loss_lmmd.item() * src_x.size(0)
             tot_loss_sum  += loss.item()     * (src_x.size(0) + tgt_x.size(0))
             tot_cls_samples += src_x.size(0)
             tot_dom_samples += (src_x.size(0) + tgt_x.size(0))
@@ -386,7 +241,7 @@ def train_dann_infomax_lmmd(model,
         # ---- Epoch Log ----
         avg_cls = cls_loss_sum / max(1, tot_cls_samples)
         avg_dom = dom_loss_sum / max(1, tot_dom_samples)
-        avg_im = im_loss_sum / max(1, tot_target_samples)
+        avg_im  = im_loss_sum  / max(1, tot_target_samples)
         avg_mmd = mmd_loss_sum / max(1, tot_cls_samples)
         avg_tot = tot_loss_sum / max(1, tot_dom_samples)
         acc_src = dom_correct_src / max(1, dom_total_src)
@@ -397,12 +252,12 @@ def train_dann_infomax_lmmd(model,
 
         print(f"[Epoch {epoch+1}] Total loss:{avg_tot:.4f} | Avg cls loss:{avg_cls:.4f} | avg Dom loss:{avg_dom:.4f} "
               f"| avg IM loss:{avg_im:.4f} | avg LMMD loss:{avg_mmd:.4f} | DomAcc:{dom_acc:.4f} | "
-              f"cov:{cov:.2%} "
+              f"cov:{cov:.2%} margin:{margin_mean:.3f} | "
               f"λ_GRL:{model.lambda_:.4f} | λ_mmd_eff:{lambda_mmd_eff:.4f}")
 
         gap_hist.append(gap)
 
-        score =gap  + avg_im
+        score =gap + avg_im
 
         # Record the optimal model
         if epoch > 15:
@@ -426,38 +281,38 @@ def train_dann_infomax_lmmd(model,
                     # Prioritize backloading the "plateau optimal"; otherwise, backloading the "global optimal"
                     if plateau_best_state is not None:
                         model.load_state_dict(plateau_best_state)
-
                     elif best_state is not None:
                         model.load_state_dict(best_state)
-
                     break
             else:
 
                 patience = 0
-        # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/target/test/HC_T194_RP.txt'
-        # test_dataset = PKLDataset(target_test_path)
-        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        # general_test_model(model, criterion_cls, test_loader, device)
+        print("[INFO] Evaluating on target test set...")
+        target_test_path = '../datasets/target/test/HC_T194_RP.txt'
+        test_dataset = PKLDataset(target_test_path)
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        general_test_model(model, criterion_cls, test_loader, device)
 
     if plateau_best_state is not None:
         model.load_state_dict(plateau_best_state)
-
     elif best_state is not None:
         model.load_state_dict(best_state)
-
 
     return model
 
 
 if __name__ == "__main__":
     with open("../configs/default.yaml", 'r') as f:
-        cfg = yaml.safe_load(f)['baseline_2']
-    bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
-    num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
+        cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
+    bs = 32
+    lr = 0.0003324252536743887
+    wd = 0.0007058092493725117
+    num_layers = cfg['num_layers']
+    ksz = cfg['kernel_size']
+    sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
-    files = [194]
+    files = [185]
     # files = [185, 188, 191, 194, 197]
     for file in files:
 
@@ -468,28 +323,40 @@ if __name__ == "__main__":
         print(f"[INFO] Loading HC_T{file} ...")
 
         for run_id in range(5):
+            print(f"\n========== RUN {run_id} ==========")
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             model = Flexible_DANN(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                   cnn_act='leakrelu', num_classes=10, lambda_=1.0).to(device)
 
             src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
+            ps_loader = get_pseudo_dataloaders(tgt_path, batch_size=bs)
+            optimizer = torch.optim.Adam(
+                adam_param_groups(model, wd),
+                lr=lr, betas=(0.9, 0.999)
+            )
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
             c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
 
             print("[INFO] Starting DANN + InfoMax + (quality-gated) LMMD ...")
             model = train_dann_infomax_lmmd(
-                model, src_loader, tgt_loader,
+                model, src_loader, tgt_loader,ps_loader,
                 optimizer, c_cls, c_dom, device,
                 num_epochs=num_epochs, num_classes=10,
+                pseudo_thresh=0.95,
                 scheduler=scheduler, batch_size=bs,
                 # InfoMax Hyperparameters
-                im_T=1.0, im_weight=0.8, im_marg_w=1.0,
-                lmmd_start_epoch=5,
+                im_T=1, im_weight=0.8, im_marg_w=1.0,
+                grl_lambda_max=0.5, max_lambda=0.35,
+                lmmd_start_epoch=4, lmmd_t=2
             )
 
             print("[INFO] Evaluating on target test set...")
             test_ds = PKLDataset(tgt_test)
             test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
             general_test_model(model, c_cls, test_loader, device)
+
+            del model, optimizer, scheduler, src_loader, tgt_loader, test_loader, test_ds
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+

@@ -18,7 +18,8 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
            cnn_act (str): Activation function ('relu', 'leakrelu', 'sigmoid', 'tanh').
            input_size (int): Input sequence length (used to infer output shape).
        """
-    def __init__(self, num_layers=6, start_channels=8,kernel_size=15, cnn_act='leakrelu',input_size=2800):
+
+    def __init__(self, num_layers=6, start_channels=8, kernel_size=15, cnn_act='leakrelu', input_size=2800):
         super(Flexible_CNN_FeatureExtractor, self).__init__()
 
         activation_dict = {
@@ -36,26 +37,21 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
         for i in range(num_layers):
             out_channels = start_channels * (2 ** i)
             padding = (kernel_size - 1) // 2
-            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding,bias=False))
-            g = max(1, out_channels // 8)
-            while out_channels % g != 0:
-                g -= 1
-            layers.append(nn.GroupNorm(num_groups=g, num_channels=out_channels))
+            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=False))
+            layers.append(nn.GroupNorm(num_groups=out_channels // 2, num_channels=out_channels))
             layers.append(activation_fn())
             layers.append(nn.MaxPool1d(kernel_size=2))
             in_channels = out_channels
 
         self.conv = nn.Sequential(*layers)
         with torch.no_grad():
-            dummy_input = torch.randn(1, 1, input_size)
-            out = self.conv(dummy_input)  # out: (1, C, L')
-            self.feature_dim = out.shape[1] * 2
+            dummy_input = torch.randn(1, 1, input_size)  # B=1, C=1, L=input_size
+            out = self.conv(dummy_input)
+            self.feature_dim = out.shape[1] * out.shape[2]  # C × L
 
     def forward(self, x):
         x = self.conv(x)  # (B, C, 1)
-        mu = x.mean(dim=-1)  # (B,C)
-        sigma = x.var(dim=-1, unbiased=False).clamp_min(1e-12).sqrt()  # (B,C)
-        x = torch.cat([mu, sigma], dim=1)  # (B,2C)
+        x = x.view(x.size(0), -1)  # 展平为 (B, C)
         return x
 
 

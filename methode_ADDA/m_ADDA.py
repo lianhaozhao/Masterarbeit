@@ -10,11 +10,11 @@ from PKLDataset import PKLDataset
 from models.get_no_label_dataloader import get_dataloaders
 from utils.general_train_and_test import general_test_model
 
-def adam_param_groups(model, weight_decay):
-    """对 BN/偏置不做 weight decay"""
+def adam_param_groups(named_params, weight_decay):
     decay, no_decay = [], []
-    for n, p in model.named_parameters():
-        if not p.requires_grad: continue
+    for n, p in named_params:
+        if not p.requires_grad:
+            continue
         if p.ndim == 1 or n.endswith(".bias"):
             no_decay.append(p)
         else:
@@ -23,6 +23,7 @@ def adam_param_groups(model, weight_decay):
         {"params": decay, "weight_decay": weight_decay},
         {"params": no_decay, "weight_decay": 0.0},
     ]
+
 
 #  阶段1：源域监督预训练 (Fs + C)
 def pretrain_source_classifier(src_model, source_loader, optimizer, criterion_cls, device, num_epochs=5, scheduler=None):
@@ -56,8 +57,8 @@ def train_adda_pure(
     tgt_model.classifier.eval()
 
     # 只拿 encoder 参数给优化器
-    enc_params = [p for n, p in tgt_model.named_parameters() if not n.startswith('classifier')]
-    opt_ft = torch.optim.Adam(enc_params, lr=lr_ft, weight_decay=weight_decay)
+    enc_params = [(n, p) for n, p in tgt_model.named_parameters() if not n.startswith('classifier')]
+    opt_ft = torch.optim.Adam(adam_param_groups(enc_params, weight_decay), lr=lr_ft)
 
     # 3) 构造域判别器 D（输入是特征）
     with torch.no_grad():
@@ -161,7 +162,11 @@ if __name__ == "__main__":
         src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                   cnn_act='leakrelu', num_classes=10).to(device)
         src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-        optimizer_src = torch.optim.Adam(src_model.parameters(), lr=lr, weight_decay=wd)
+        optimizer_src = torch.optim.Adam(
+            adam_param_groups(src_model.named_parameters(), wd),
+            lr=lr
+        )
+
         scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=num_epochs, eta_min=lr*0.1)
         src_cls = nn.CrossEntropyLoss()
 
