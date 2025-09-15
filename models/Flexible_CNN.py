@@ -68,7 +68,8 @@ class Flexible_CNN_Classifier(nn.Module):
         p (float): Dropout probability.
         temperature (float): Scaling factor for cosine logits.
     """
-    def __init__(self, feature_dim, num_classes=10, hidden=512, p=0.2, temperature=0.05):
+    #修改
+    def __init__(self, feature_dim, num_classes=10, hidden=256, p=0.2, temperature=0.05):
         super().__init__()
         self.temperature = temperature
 
