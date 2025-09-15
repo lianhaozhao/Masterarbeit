@@ -25,7 +25,7 @@ class Flexible_ADDA(nn.Module):
         features = self.feature_extractor(x)
         class_outputs = self.classifier(features)
         reduced_features = self.feature_reducer(features)
-        return class_outputs,features, reduced_features
+        return class_outputs, features, reduced_features
 
 
 class DomainClassifier(nn.Module):
