@@ -288,7 +288,7 @@ def train_dann_infomax_lmmd(model,
 
                 patience = 0
         print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T194_RP.txt'
+        target_test_path = '../datasets/target/test/HC_T191_RP.txt'
         test_dataset = PKLDataset(target_test_path)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         general_test_model(model, criterion_cls, test_loader, device)
@@ -306,13 +306,13 @@ if __name__ == "__main__":
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = 64
     lr = 0.000609723306856073
-    wd = 7.373479221549502e-06
+    wd = 7.373479221549502e-04
     num_layers = cfg['num_layers']
     ksz = cfg['kernel_size']
     sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
-    files = [185]
+    files = [191]
     # files = [185, 188, 191, 194, 197]
     for file in files:
 
@@ -359,4 +359,3 @@ if __name__ == "__main__":
             del model, optimizer, scheduler, src_loader, tgt_loader, test_loader, test_ds
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-

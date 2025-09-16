@@ -297,8 +297,8 @@ def suggest_adv_only(trial):
     params = {
         "batch_size":    trial.suggest_categorical("batch_size", [32, 64]),  # 可改成 [32, 48, 64]
         "learning_rate": trial.suggest_float("learning_rate", 1e-4, 1e-3, log=True),
-        "weight_decay":  trial.suggest_float("weight_decay", 1e-5, 1e-3, log=True),
-        "grl_lambda_max":    trial.suggest_categorical("grl_lambda_max", [0.5]),
+        "weight_decay":  trial.suggest_float("weight_decay", 1e-4, 1e-3, log=True),
+        "grl_lambda_max":    trial.suggest_categorical("grl_lambda_max", [0.5,0.6]),
         "lmmd_lambda_max":   trial.suggest_float("lmmd_lambda_max", 0.35, 0.5, log=True),
         "lmmd_t":            trial.suggest_categorical("lmmd_t", [2]),
         "pseudo_thresh":     trial.suggest_categorical("pseudo_thresh", [0.95]),

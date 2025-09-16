@@ -8,19 +8,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from models.Flexible_CNN_MCD import Flexible_MCD
 from PKLDataset import PKLDataset
-from models.get_no_label_dataloader import get_target_loader
-from utils.general_train_and_test import general_test_model
+from models.get_no_label_dataloader import get_dataloaders
+from models.MMD import infomax_loss_from_logits
 
-
-def set_seed(seed=42):
-    torch.manual_seed(seed); np.random.seed(seed); random.seed(seed)
-    if torch.cuda.is_available(): torch.cuda.manual_seed_all(seed)
-
-def get_dataloaders(source_path, target_path, batch_size):
-    src_ds = PKLDataset(txt_path=source_path)
-    tgt_loader = get_target_loader(target_path, batch_size=batch_size, shuffle=True)
-    src_loader = DataLoader(src_ds, batch_size=batch_size, shuffle=True)
-    return src_loader, tgt_loader
 
 # MCD 的分歧度量
 def discrepancy(logits1, logits2, reduction='mean'):
@@ -28,7 +18,7 @@ def discrepancy(logits1, logits2, reduction='mean'):
     d = (p1 - p2).abs().sum(1)
     return d.mean() if reduction == 'mean' else d.sum() if reduction == 'sum' else d
 
-# ====== 评估（给出 C1/C2/Ensemble） ======
+#  评估（给出 C1/C2/Ensemble）
 @torch.no_grad()
 def MCD_evaluate(model, loader, device):
     model.eval()
@@ -61,7 +51,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
 
     # 优化器：GC / 仅C / 仅G
     optim_GC = torch.optim.Adam(
-        list(model.feature_extractor.parameters()) +
+        list(model.feature_extractor.parameters()) + list(model.feature_reducer.parameters()) +
         list(model.c1.parameters()) + list(model.c2.parameters()),
         lr=lr_g, weight_decay=weight_decay
     )
@@ -70,7 +60,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
         lr=lr_c, weight_decay=weight_decay
     )
     optim_G  = torch.optim.Adam(
-        model.feature_extractor.parameters(),
+        list(model.feature_extractor.parameters()) + list(model.feature_reducer.parameters()),
         lr=lr_g, weight_decay=weight_decay
     )
 
@@ -93,7 +83,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
             xs, ys, xt = xs.to(device), ys.to(device).long(), xt.to(device)
 
             # ---- Step A: 源域监督 (更新 G, C1, C2) ----
-            model.feature_extractor.train();model.c1.train(); model.c2.train()
+            model.feature_extractor.train();model.feature_reducer.train();model.c1.train(); model.c2.train()
             optim_GC.zero_grad()
             l1s, l2s, _ = model(xs)
             loss_src = F.cross_entropy(l1s, ys) + F.cross_entropy(l2s, ys)
@@ -103,21 +93,24 @@ def train_mcd(model, src_loader, tgt_loader, device,
             countA +=1
 
             # ---- Step B: 固定 G，最大化目标域分歧（更新 C1/C2）----
-            model.feature_extractor.eval()  # 避免 BN 统计量被更新
+            model.feature_extractor.eval()
+            model.feature_reducer.eval()
+            for p in model.feature_extractor.parameters(): p.requires_grad_(False)
+            for p in model.feature_reducer.parameters(): p.requires_grad_(False)
+
+            with torch.no_grad():
+                ft = model.feature_reducer(model.feature_extractor(xt))
+                fs_b = model.feature_reducer(model.feature_extractor(xs))
             model.c1.train()
             model.c2.train()
-            for p in model.feature_extractor.parameters(): p.requires_grad_(False)
             for _ in range(nB):
                 optim_C.zero_grad()
-                ft = model.feature_extractor(xt).detach()      # 固定 G
                 l1t = model.c1(ft); l2t = model.c2(ft)
                 disc_t = discrepancy(l1t, l2t, 'mean')
 
                 # 同时维持源域能力，避免崩坏（源域 CE）
-                fs_b = model.feature_extractor(xs).detach()       # 通过图传播到 C1/C2
                 ls1_b, ls2_b = model.c1(fs_b), model.c2(fs_b)
                 loss_src_b = F.cross_entropy(ls1_b, ys) + F.cross_entropy(ls2_b, ys)
-
                 lossB = loss_src_b - lambda_dis * disc_t   # 最小化该式 => 最大化分歧
                 lossB.backward(); optim_C.step()
                 sumB += lossB.item()
@@ -125,7 +118,9 @@ def train_mcd(model, src_loader, tgt_loader, device,
 
             # ---- Step C: 固定 C1/C2，最小化目标域分歧（更新 G）----
             for p in model.feature_extractor.parameters(): p.requires_grad_(True)
+            for p in model.feature_reducer.parameters(): p.requires_grad_(True)
             model.feature_extractor.train()
+            model.feature_reducer.train()
             model.c1.eval()
             model.c2.eval()
             for p in model.c1.parameters(): p.requires_grad_(False)
@@ -133,9 +128,13 @@ def train_mcd(model, src_loader, tgt_loader, device,
             for _ in range(nC):
                 optim_G.zero_grad()
                 ft_c = model.feature_extractor(xt)
+                ft_c = model.feature_reducer(ft_c)
                 lt1_c, lt2_c = model.c1(ft_c), model.c2(ft_c)
+                loss_im_1, _, _ = infomax_loss_from_logits(lt1_c, T=1, marg_weight=1)
+                loss_im_2, _, _ = infomax_loss_from_logits(lt2_c, T=1, marg_weight=1)
+                loss_im = 0.5 * loss_im_1 + 0.5 * loss_im_2
                 disc_c = discrepancy(lt1_c, lt2_c, 'mean')
-                lossC = lambda_dis * disc_c
+                lossC = lambda_dis * disc_c + loss_im
                 lossC.backward(); optim_G.step()
                 sumC += lossC.item()
             countC += nC
@@ -146,7 +145,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
         avg_lossA = sumA / max(1, countA)
         avg_lossB = sumB / max(1, countB)
         avg_lossC = sumC / max(1, countC)
-        print(f"[Epoch {epoch:03d} | Step {global_step:05d}] "
+        print(f"[Epoch {epoch:03d}] "
               f"lossA:{avg_lossA:.4f} lossB(last):{avg_lossB:.4f} lossC(last):{avg_lossC:.4f}")
 
 
@@ -158,8 +157,8 @@ def train_mcd(model, src_loader, tgt_loader, device,
         print(f"ACC_A: {ACC_A}, ACC_B: {ACC_B}, ACC_AVG: {ACC_AVG}")
 
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
+    # if best_state is not None:
+    #     model.load_state_dict(best_state)
 
     return model
 
@@ -171,7 +170,7 @@ if __name__ == "__main__":
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
     num_epochs = cfg['num_epochs']
 
-    # 数据路径（与你原脚本保持一致）
+    # 数据路径
     src_path = "../datasets/source/train/DC_T197_RP.txt"
     tgt_path = "../datasets/target/train/HC_T185_RP.txt"
     tgt_test = "../datasets/target/test/HC_T185_RP.txt"
@@ -193,7 +192,7 @@ if __name__ == "__main__":
     model = train_mcd(
         model, src_loader, tgt_loader, device,
         num_epochs=20, lr_g=lr, lr_c=lr, weight_decay=wd,
-        lambda_dis=1.0, nB=4, nC=5
+        lambda_dis=1.0, nB=2, nC=3
     )
 
     print("[INFO] Evaluating on target test set...")
