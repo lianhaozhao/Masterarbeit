@@ -1,0 +1,215 @@
+C:\Users\15185\anaconda3\envs\Masterarbeit\python.exe D:\Masterarbeit\baseline\baseline_test.py
+run0start
+D:\Masterarbeit\baseline\baseline_test.py:43: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  model.load_state_dict(torch.load(model_path, map_location=device))
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.61it/s]
+Testing:   0%|          | 0/152 [00:00<?, ?it/s]
+file:../datasets/HC_T197_RP.txt
+Test Loss: 4.455446 Test Accuracy: 0.4848
+Testing: 100%|██████████| 152/152 [00:03<00:00, 40.19it/s]
+Testing:   0%|          | 0/157 [00:00<?, ?it/s]
+file:../datasets/HC_T194_RP.txt
+Test Loss: 6.060918 Test Accuracy: 0.2793
+Testing: 100%|██████████| 157/157 [00:03<00:00, 41.42it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 4.907922 Test Accuracy: 0.2938
+Testing: 100%|██████████| 157/157 [00:03<00:00, 42.43it/s]
+Testing:   0%|          | 0/155 [00:00<?, ?it/s]
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.336232 Test Accuracy: 0.3303
+Testing: 100%|██████████| 155/155 [00:03<00:00, 39.01it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.251864 Test Accuracy: 0.3034
+run1start
+Testing: 100%|██████████| 157/157 [00:05<00:00, 31.12it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 2.862891 Test Accuracy: 0.6048
+Testing: 100%|██████████| 152/152 [00:03<00:00, 40.83it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 5.996970 Test Accuracy: 0.3351
+Testing: 100%|██████████| 157/157 [00:03<00:00, 39.56it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 5.070482 Test Accuracy: 0.4092
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.86it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.865120 Test Accuracy: 0.4219
+Testing: 100%|██████████| 155/155 [00:03<00:00, 41.64it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.335491 Test Accuracy: 0.4568
+run2start
+Testing: 100%|██████████| 157/157 [00:04<00:00, 37.27it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 3.535709 Test Accuracy: 0.4551
+Testing: 100%|██████████| 152/152 [00:03<00:00, 40.78it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 5.086354 Test Accuracy: 0.2775
+Testing: 100%|██████████| 157/157 [00:04<00:00, 35.76it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 4.242692 Test Accuracy: 0.2840
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.50it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.147491 Test Accuracy: 0.3425
+Testing: 100%|██████████| 155/155 [00:03<00:00, 42.29it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.732369 Test Accuracy: 0.3081
+run3start
+Testing: 100%|██████████| 157/157 [00:03<00:00, 42.47it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 3.716774 Test Accuracy: 0.5271
+Testing: 100%|██████████| 152/152 [00:03<00:00, 40.33it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 6.307908 Test Accuracy: 0.2762
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.73it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 5.750176 Test Accuracy: 0.3685
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.84it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 5.091467 Test Accuracy: 0.3689
+Testing: 100%|██████████| 155/155 [00:03<00:00, 40.48it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.944545 Test Accuracy: 0.3890
+run4start
+Testing: 100%|██████████| 157/157 [00:03<00:00, 39.95it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 3.931481 Test Accuracy: 0.4331
+Testing: 100%|██████████| 152/152 [00:03<00:00, 40.01it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 5.048471 Test Accuracy: 0.2869
+Testing: 100%|██████████| 157/157 [00:03<00:00, 39.55it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 4.588310 Test Accuracy: 0.3078
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.11it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.736981 Test Accuracy: 0.3405
+Testing: 100%|██████████| 155/155 [00:03<00:00, 41.07it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.367370 Test Accuracy: 0.4174
+run5start
+Testing: 100%|██████████| 157/157 [00:03<00:00, 39.48it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 3.525820 Test Accuracy: 0.5399
+Testing: 100%|██████████| 152/152 [00:03<00:00, 40.72it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 3.596753 Test Accuracy: 0.4294
+Testing: 100%|██████████| 157/157 [00:03<00:00, 41.33it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 3.613957 Test Accuracy: 0.4465
+Testing: 100%|██████████| 157/157 [00:04<00:00, 38.73it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.569465 Test Accuracy: 0.4149
+Testing: 100%|██████████| 155/155 [00:04<00:00, 38.02it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.018022 Test Accuracy: 0.4753
+run6start
+Testing: 100%|██████████| 157/157 [00:04<00:00, 38.12it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 4.865307 Test Accuracy: 0.5170
+Testing: 100%|██████████| 152/152 [00:03<00:00, 42.84it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 7.487959 Test Accuracy: 0.2834
+Testing: 100%|██████████| 157/157 [00:03<00:00, 42.19it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 5.745614 Test Accuracy: 0.3301
+Testing: 100%|██████████| 157/157 [00:03<00:00, 40.91it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 4.287643 Test Accuracy: 0.4187
+Testing: 100%|██████████| 155/155 [00:04<00:00, 38.18it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 4.452875 Test Accuracy: 0.4205
+run7start
+Testing: 100%|██████████| 157/157 [00:04<00:00, 38.24it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 3.903424 Test Accuracy: 0.4463
+Testing: 100%|██████████| 152/152 [00:03<00:00, 41.62it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 4.963987 Test Accuracy: 0.2857
+Testing: 100%|██████████| 157/157 [00:03<00:00, 39.91it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 4.218220 Test Accuracy: 0.3828
+Testing: 100%|██████████| 157/157 [00:05<00:00, 26.70it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.751394 Test Accuracy: 0.3921
+Testing: 100%|██████████| 155/155 [00:06<00:00, 25.62it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 3.155790 Test Accuracy: 0.4698
+run8start
+Testing: 100%|██████████| 157/157 [00:05<00:00, 26.21it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 3.569145 Test Accuracy: 0.4681
+Testing: 100%|██████████| 152/152 [00:05<00:00, 25.93it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 5.985056 Test Accuracy: 0.2789
+Testing: 100%|██████████| 157/157 [00:07<00:00, 22.02it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 5.421058 Test Accuracy: 0.3052
+Testing: 100%|██████████| 157/157 [00:07<00:00, 22.27it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 5.014217 Test Accuracy: 0.3141
+Testing: 100%|██████████| 155/155 [00:07<00:00, 21.76it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 4.065595 Test Accuracy: 0.2939
+run9start
+Testing: 100%|██████████| 157/157 [00:07<00:00, 21.02it/s]
+
+file:../datasets/HC_T197_RP.txt
+Test Loss: 2.598367 Test Accuracy: 0.5022
+Testing: 100%|██████████| 152/152 [00:07<00:00, 20.56it/s]
+
+file:../datasets/HC_T194_RP.txt
+Test Loss: 4.527684 Test Accuracy: 0.3152
+Testing: 100%|██████████| 157/157 [00:06<00:00, 22.44it/s]
+
+file:../datasets/HC_T191_RP.txt
+Test Loss: 4.116156 Test Accuracy: 0.3439
+Testing: 100%|██████████| 157/157 [00:06<00:00, 25.05it/s]
+
+file:../datasets/HC_T188_RP.txt
+Test Loss: 3.159762 Test Accuracy: 0.4548
+Testing: 100%|██████████| 155/155 [00:06<00:00, 24.75it/s]
+
+file:../datasets/HC_T185_RP.txt
+Test Loss: 2.768312 Test Accuracy: 0.5430
+
+Process finished with exit code 0
