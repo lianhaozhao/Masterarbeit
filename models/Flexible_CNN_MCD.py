@@ -68,7 +68,7 @@ class Flexible_CNN_Classifier(nn.Module):
         p (float): Dropout probability.
         temperature (float): Scaling factor for cosine logits.
     """
-    def __init__(self, feature_dim, num_classes=10, hidden=512, p=0.2, temperature=0.05):
+    def __init__(self, feature_dim, num_classes=10, hidden=256, p=0.2, temperature=0.05):
         super().__init__()
         self.temperature = temperature
 
@@ -106,11 +106,11 @@ class Flexible_MCD(nn.Module):
             kernel_size=kernel_size, cnn_act=cnn_act, input_size=input_size
         )
         feature_dim = self.feature_extractor.feature_dim
-        self.c1 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
-        self.c2 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
+        self.c1 = Flexible_CNN_Classifier(512, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
+        self.c2 = Flexible_CNN_Classifier(512, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
         self.feature_reducer = nn.Sequential(
-            nn.Linear(feature_dim, 256, bias=False),
-            nn.LayerNorm(256),
+            nn.Linear(feature_dim, 512, bias=False),
+            nn.LayerNorm(512),
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(p=0.1),
         )
@@ -118,16 +118,9 @@ class Flexible_MCD(nn.Module):
             if isinstance(m, nn.Linear):
                 nn.init.xavier_normal_(m.weight)
 
-    def forward(self, x, return_feat=False):
+    def forward(self, x):
         features = self.feature_extractor(x)
         reduced_features = self.feature_reducer(features)
-        if return_feat:
-            l1, z1 = self.c1(features, return_feat=True)
-            l2, z2 = self.c2(features, return_feat=True)
-            z1 = reduced_features(z1)
-            z2 = reduced_features(z2)
-            return l1, l2, z1, z2
-        else:
-            l1 = self.c1(features)
-            l2 = self.c2(features)
-            return l1, l2, reduced_features
+        l1 = self.c1(reduced_features)
+        l2 = self.c2(reduced_features)
+        return l1, l2, reduced_features
