@@ -2,9 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
-
-
 class Flexible_CNN_FeatureExtractor(nn.Module):
     """
        A flexible 1D CNN feature extractor for time-series or signal data.
@@ -41,16 +38,27 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
             layers.append(activation_fn())
             layers.append(nn.MaxPool1d(kernel_size=2))
             in_channels = out_channels
-
         self.conv = nn.Sequential(*layers)
         with torch.no_grad():
             dummy_input = torch.randn(1, 1, input_size)  # B=1, C=1, L=input_size
             out = self.conv(dummy_input)
             self.feature_dim = out.shape[1] * out.shape[2]  # C × L
+            self.last_channels = out.shape[1]
+        self.feature_reducer = nn.Sequential(
+            nn.Linear(self.feature_dim, 512, bias=False),
+            nn.LayerNorm(512),
+            nn.LeakyReLU(0.01, inplace=True),
+            nn.Dropout(p=0.1),
+        )
+        for m in self.feature_reducer:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_normal_(m.weight)
+
 
     def forward(self, x):
-        x = self.conv(x)  # (B, C, 1)
-        x = x.view(x.size(0), -1)  # 展平为 (B, C)
+        x = self.conv(x)  # (B, C, L)
+        x = x.view(x.size(0), -1)
+        x = self.feature_reducer(x)
         return x
 
 
@@ -68,6 +76,7 @@ class Flexible_CNN_Classifier(nn.Module):
         p (float): Dropout probability.
         temperature (float): Scaling factor for cosine logits.
     """
+    #修改
     def __init__(self, feature_dim, num_classes=10, hidden=256, p=0.2, temperature=0.05):
         super().__init__()
         self.temperature = temperature
@@ -97,30 +106,55 @@ class Flexible_CNN_Classifier(nn.Module):
             return logits, z
         return logits
 
-class Flexible_MCD(nn.Module):
-    def __init__(self, num_layers=6, start_channels=8, kernel_size=15, cnn_act='leakrelu',
-                 num_classes=10, input_size=2800, hidden=512, p=0.3, temperature=0.05):
-        super().__init__()
-        self.feature_extractor = Flexible_CNN_FeatureExtractor(
-            num_layers=num_layers, start_channels=start_channels,
-            kernel_size=kernel_size, cnn_act=cnn_act, input_size=input_size
-        )
-        feature_dim = self.feature_extractor.feature_dim
-        self.c1 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
-        self.c2 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
-        self.feature_reducer = nn.Sequential(
-            nn.Linear(feature_dim, 512, bias=False),
-            nn.LayerNorm(512),
-            nn.LeakyReLU(0.01, inplace=True),
-            nn.Dropout(p=0.1),
-        )
-        for m in self.feature_reducer:
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_normal_(m.weight)
 
-    def forward(self, x):
-        features = self.feature_extractor(x)
-        reduced_features = self.feature_reducer(features)
-        l1 = self.c1(features)
-        l2 = self.c2(features)
-        return l1, l2, reduced_features
+
+
+class Flexible_CNN(nn.Module):
+    """
+        A complete CNN model combining the feature extractor and classifier.
+
+        Args:
+            num_layers (int): Number of conv layers in the feature extractor.
+            start_channels (int): Base number of conv channels.
+            kernel_size (int): Kernel size for convolutions.
+            cnn_act (str): Activation function name.
+            num_classes (int): Number of output classes.
+        """
+    def __init__(self, num_layers=2, start_channels=8, kernel_size=3, cnn_act='leakrelu', num_classes=10,input_size=2800):
+        super(Flexible_CNN, self).__init__()
+        self.feature_extractor = Flexible_CNN_FeatureExtractor(
+            num_layers=num_layers,
+            start_channels=start_channels,
+            cnn_act=cnn_act,
+            kernel_size=kernel_size,
+            input_size=input_size
+        )
+        feature_dim = 512
+        self.classifier = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes)
+
+    def forward(self, x, return_features=False):
+        features = self.feature_extractor(x)       # (B, D)
+        out = self.classifier(features)            # (B, num_classes)
+        if return_features:
+            return out, features
+        else:
+            return out
+
+
+def freeze_feature_train_head(model, lr, weight_decay):
+    """
+        Freezes the feature extractor and returns an optimizer for training only the classifier head.
+
+        Args:
+            model (nn.Module): The model with 'feature_extractor' and 'classifier' attributes.
+            lr (float): Learning rate for the optimizer.
+            weight_decay (float): Weight decay (L2 regularization).
+
+        Returns:
+            torch.optim.Optimizer: Optimizer for the classifier parameters only.
+        """
+    for param in model.feature_extractor.parameters():
+        param.requires_grad = False
+    model.feature_extractor.eval()
+    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=lr, weight_decay=weight_decay)
+    return optimizer
