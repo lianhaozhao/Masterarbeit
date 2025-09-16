@@ -10,8 +10,8 @@ class Flexible_ADDA(nn.Module):
         feature_dim = self.feature_extractor.feature_dim
         self.classifier = Flexible_CNN_Classifier(feature_dim, num_classes)
         self.feature_reducer = nn.Sequential(
-            nn.Linear(feature_dim, 512, bias=False),
-            nn.LayerNorm(512),
+            nn.Linear(feature_dim, 256, bias=False),
+            nn.LayerNorm(256),
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(p=0.1) ,
         )
@@ -25,7 +25,7 @@ class Flexible_ADDA(nn.Module):
         features = self.feature_extractor(x)
         reduced_features = self.feature_reducer(features)
         class_outputs = self.classifier(features)
-        return class_outputs, reduced_features
+        return class_outputs, features, reduced_features
 
 
 class DomainClassifier(nn.Module):
