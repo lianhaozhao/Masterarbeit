@@ -99,7 +99,7 @@ class Flexible_CNN_Classifier(nn.Module):
 
 class Flexible_MCD(nn.Module):
     def __init__(self, num_layers=6, start_channels=8, kernel_size=15, cnn_act='leakrelu',
-                 num_classes=10, input_size=2800, hidden=512, p=0.3, temperature=0.05):
+                 num_classes=10, input_size=2800, hidden=512, p=0.2, temperature=0.05):
         super().__init__()
         self.feature_extractor = Flexible_CNN_FeatureExtractor(
             num_layers=num_layers, start_channels=start_channels,
@@ -109,8 +109,8 @@ class Flexible_MCD(nn.Module):
         self.c1 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
         self.c2 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
         self.feature_reducer = nn.Sequential(
-            nn.Linear(feature_dim, 512, bias=False),
-            nn.LayerNorm(512),
+            nn.Linear(feature_dim, 256, bias=False),
+            nn.LayerNorm(256),
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(p=0.1),
         )

@@ -13,6 +13,62 @@ from utils.general_train_and_test import general_test_model
 from models.MMD import classwise_mmd_biased_weighted, suggest_mmd_gammas, infomax_loss_from_logits
 from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
 
+class MultiPrototypes(nn.Module):
+    def __init__(self, num_classes, feat_dim, num_protos=3, momentum=0.95):
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_protos = num_protos
+        self.m = float(momentum)
+        # [C, K, d]
+        self.register_buffer('proto', torch.zeros(num_classes, num_protos, feat_dim))
+
+    @torch.no_grad()
+    def update(self, feats, labels, weights=None):
+        if feats.numel() == 0:
+            return
+        device = feats.device  # 保持和输入特征一致
+        for c in labels.unique():
+            mask = (labels == c)
+            if mask.sum() == 0: continue
+            vec = feats[mask].mean(dim=0)
+
+            # 确保 proto 在同一个 device
+            proto_c = self.proto[c].to(device)
+
+            sims = F.cosine_similarity(proto_c, vec.unsqueeze(0), dim=1)  # [K]
+            k = sims.argmax().item()
+
+            # 更新时也要保持 device 一致
+            self.proto[c, k] = (
+                    self.m * self.proto[c, k].to(device) + (1 - self.m) * vec
+            )
+
+    def supcon_logits(self, feats, tau=0.1, agg="max"):
+        """
+        feats: [N, d]
+        return: [N, C]
+        """
+        f = F.normalize(feats, dim=1, eps=1e-8)             # [N, d]
+        p = F.normalize(self.proto.to(device), dim=2, eps=1e-8)       # [C, K, d]
+
+        # [N, d] @ [C*K, d]^T -> [N, C*K]
+        logits_all = f @ p.reshape(-1, p.size(-1)).t()
+        logits_all = logits_all / float(tau)
+
+        # reshape -> [N, C, K]
+        logits_all = logits_all.view(feats.size(0), self.num_classes, self.num_protos)
+
+        # 聚合
+        if agg == "max":
+            logits = logits_all.max(dim=2).values
+        elif agg == "mean":
+            logits = logits_all.mean(dim=2)
+        elif agg == "lse":  # log-sum-exp
+            logits = torch.logsumexp(logits_all, dim=2)
+        else:
+            raise ValueError(f"Unknown agg={agg}")
+        return logits
+
 def adam_param_groups(named_params, weight_decay):
     decay, no_decay = [], []
     for n, p in named_params:
@@ -41,7 +97,7 @@ def copy_encoder_params(src_model, tgt_model, device):
     tgt_model.to(device)
 
 
-
+# 阶段1 —— 仅用源域训练 (F_s + C)
 def pretrain_source_classifier(
         src_model,
         source_loader,
@@ -57,8 +113,9 @@ def pretrain_source_classifier(
 ):
     """
     - 源域：交叉熵 -> 更新 feature_extractor + classifier
-    - 目标域：InfoMax -> 仅更新 classifier（feature_extractor 冻结）
+    - 目标域：InfoMax -> 更新 feature_extractor + classifier
     """
+
     for epoch in range(num_epochs):
         src_model.train()
         tot_loss = tot_n = 0.0
@@ -87,10 +144,8 @@ def pretrain_source_classifier(
             logits_s, _, _ = src_model(xb)
             loss_ce = criterion_cls(logits_s, yb)
 
-            # --- 目标域 InfoMax (只更新 classifier) ---
-            with torch.no_grad():
-                _, f_t, _ = src_model(xt)
-            logits_t = src_model.classifier(f_t.detach())  # forward 只过 classifier
+            # --- 目标域 InfoMax ---
+            logits_t, f_t, _ = src_model(xt)
             loss_im, h_cond, h_marg = infomax_loss_from_logits(
                 logits_t, T=im_T, marg_weight=im_marg_w
             )
@@ -115,7 +170,6 @@ def pretrain_source_classifier(
             scheduler.step()
 
     return src_model
-
 
 
 # 阶段2 —— ADDA 对抗 + InfoMax
@@ -149,14 +203,16 @@ def train_adda_infomax_lmmd(
     with torch.no_grad():
         xb_s, yb_s = next(iter(source_loader))
         xb_s = xb_s.to(device)
-        _, feat_s, _  = src_model(xb_s)
+        _, feat_s, feat_c  = src_model(xb_s)
         feat_dim = feat_s.size(1)
+        feat_dim_c = feat_c.size(1)
     D = DomainClassifier(feature_dim=feat_dim).to(device)
     opt_d = torch.optim.Adam(
         adam_param_groups(D.named_parameters(), wd),
         lr=lr_d
     )
     c_dom = nn.CrossEntropyLoss().to(device)
+    proto_module = MultiPrototypes(num_classes=10, feat_dim=feat_dim_c, num_protos=4).to(device)
 
     best_loss = float("inf")
     best_state = None
@@ -176,7 +232,8 @@ def train_adda_infomax_lmmd(
             if pseudo_x.numel() > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
-        lambda_mmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=lmmd_start_epoch)
+        lambda_proto_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=6)
+        lambda_lmmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=lmmd_start_epoch)
 
         it_src, it_tgt = iter(source_loader), iter(target_loader)
         it_pl = iter(pl_loader) if pl_loader is not None else None
@@ -191,7 +248,7 @@ def train_adda_infomax_lmmd(
         D.train()
 
         # 统计
-        d_loss_sum = g_loss_sum = im_loss_sum = mmd_loss_sum = ft_loss_sum = 0.0
+        d_loss_sum = g_loss_sum = im_loss_sum = loss_lmmd_proto_sum = ft_loss_sum = 0.0
         d_acc_sum = 0.0
         d_cnt = 0
 
@@ -266,9 +323,9 @@ def train_adda_infomax_lmmd(
                         it_pl = iter(pl_loader)
                         xpl, ypl, wpl = next(it_pl)
                     xpl, ypl, wpl = xpl.to(device), ypl.to(device), wpl.to(device)
-                    _, f_s_n, _  = src_model(xs)
+                    _, f_s_n, _ = src_model(xs)
                     f_s_n = F.normalize(f_s_n, dim=1)
-                    _, f_t_pl, _  = tgt_model(xpl)
+                    _, f_t_pl, _ = tgt_model(xpl)
                     f_t_pl_n = F.normalize(f_t_pl, dim=1)
                     if cached_gammas is None:
                         cached_gammas = suggest_mmd_gammas(f_s_n.detach(), f_t_pl_n.detach())
@@ -276,11 +333,15 @@ def train_adda_infomax_lmmd(
                         f_s_n, ys, f_t_pl_n, ypl, wpl,
                         num_classes=num_classes, gammas=cached_gammas, min_count_per_class=2
                     )
-                    loss_lmmd = lambda_mmd_eff * loss_lmmd
+                    _, _, feat_tgt  = tgt_model(xpl)
+                    proto_module.update(feat_tgt, ypl)
+                    logits = proto_module.supcon_logits(feat_tgt, tau=0.1, agg="mean")
+                    loss_proto = F.cross_entropy(logits, ypl)
+                    loss_lmmd_proto = lambda_proto_eff * loss_proto + loss_lmmd*lambda_lmmd_eff
                 else:
-                    loss_lmmd = f_t.new_tensor(0.0)
+                    loss_lmmd_proto = f_t.new_tensor(0.0)
 
-                loss_ft = loss_g + loss_im + loss_lmmd
+                loss_ft = loss_g + loss_im + loss_lmmd_proto
                 opt_ft.zero_grad()
                 loss_ft.backward()
                 opt_ft.step()
@@ -290,7 +351,7 @@ def train_adda_infomax_lmmd(
 
                 g_loss_sum += to_scalar(loss_g)
                 im_loss_sum += to_scalar(loss_im)
-                mmd_loss_sum += to_scalar(loss_lmmd)
+                loss_lmmd_proto_sum += to_scalar(loss_lmmd_proto)
                 ft_loss_sum += to_scalar(loss_ft)
             for p in D.parameters():
                 p.requires_grad = True
@@ -302,10 +363,10 @@ def train_adda_infomax_lmmd(
             f"D:{d_loss_sum / max(1, steps * d_steps):.4f} | "
             f"G(adver):{g_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"IM:{im_loss_sum / max(1, steps * ft_steps):.4f} | "
-            f"LMMD:{mmd_loss_sum / max(1, steps * ft_steps):.4f} | "
+            f"proto:{loss_lmmd_proto_sum / max(1, steps * ft_steps):.4f} | "
             f"FT(total):{ft_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"D-acc:{d_acc_sum / max(1, d_cnt):.4f} | "
-            f"cov:{cov:.2%} margin:{margin_mean:.3f} | lambda_mmd_eff:{float(lambda_mmd_eff):.4f}"
+            f"cov:{cov:.2%} margin:{margin_mean:.3f} | lambda_proto_eff:{float(lambda_proto_eff):.4f}"
         )
         scr = im_loss_sum / max(1, steps * ft_steps)
         if epoch > num_epochs // 2:
@@ -313,12 +374,12 @@ def train_adda_infomax_lmmd(
                 best_loss = scr
                 best_state = copy.deepcopy(tgt_model.state_dict())
 
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T185_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        src_cls = nn.CrossEntropyLoss()
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(tgt_model, src_cls, test_loader, device)
+        # print("[INFO] Evaluating on target test set...")
+        # target_test_path = '/content/datasets/target/test/HC_T185_RP.txt'
+        # test_dataset = PKLDataset(target_test_path)
+        # src_cls = nn.CrossEntropyLoss()
+        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        # general_test_model(tgt_model, src_cls, test_loader, device)
 
         if best_state is not None:
             tgt_model.load_state_dict(best_state)
@@ -327,7 +388,7 @@ def train_adda_infomax_lmmd(
 
 
 if __name__ == "__main__":
-    with open("../configs/default.yaml", 'r') as f:
+    with open("/content/github/configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = 64
     lr_pre = 0.0009494768641358269
@@ -341,16 +402,16 @@ if __name__ == "__main__":
     num_epochs = 15
     pre_epochs = 6
 
-    files = [185]
-    # files = [185, 188, 191, 194, 197]
+    # files = [185]
+    files = [185, 188, 191, 194, 197]
     for file in files:
-        src_path = '../datasets/source/train/DC_T197_RP.txt'
-        tgt_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        tgt_test = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
+        src_path = '/content/datasets/source/train/DC_T197_RP.txt'
+        tgt_path = '/content/datasets/target/train/HC_T{}_RP.txt'.format(file)
+        tgt_test = '/content/datasets/target/test/HC_T{}_RP.txt'.format(file)
 
         print(f"[INFO] Loading HC_T{file} ...")
 
-        for run_id in range(5):
+        for run_id in range(10):
             print(f"\n========== RUN {run_id} (ADDA) ==========")
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -381,11 +442,11 @@ if __name__ == "__main__":
                 src_model, tgt_model, src_loader, tgt_loader, device,
                 num_epochs=num_epochs, num_classes=10, batch_size=bs,
                 # 判别器/优化器
-                lr_ft=lr, lr_d=lr * 0.5, wd=wd, d_steps=1, ft_steps=2,
+                lr_ft=lr, lr_d=lr * 0.5, wd=wd, d_steps=1, ft_steps=1,
                 # InfoMax
                 im_T=1.0, im_weight=0.8, im_marg_w=1.0,
                 # LMMD
-                lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.35
+                lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.5
             )
 
             print("[INFO] Evaluating on target test set...")

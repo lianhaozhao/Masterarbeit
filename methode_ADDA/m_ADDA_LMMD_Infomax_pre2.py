@@ -13,6 +13,7 @@ from utils.general_train_and_test import general_test_model
 from models.MMD import classwise_mmd_biased_weighted, suggest_mmd_gammas, infomax_loss_from_logits
 from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
 
+
 def adam_param_groups(named_params, weight_decay):
     decay, no_decay = [], []
     for n, p in named_params:
@@ -41,7 +42,7 @@ def copy_encoder_params(src_model, tgt_model, device):
     tgt_model.to(device)
 
 
-
+# 阶段1 —— 仅用源域训练 (F_s + C)
 def pretrain_source_classifier(
         src_model,
         source_loader,
@@ -57,8 +58,9 @@ def pretrain_source_classifier(
 ):
     """
     - 源域：交叉熵 -> 更新 feature_extractor + classifier
-    - 目标域：InfoMax -> 仅更新 classifier（feature_extractor 冻结）
+    - 目标域：InfoMax -> 更新 feature_extractor + classifier
     """
+
     for epoch in range(num_epochs):
         src_model.train()
         tot_loss = tot_n = 0.0
@@ -87,10 +89,8 @@ def pretrain_source_classifier(
             logits_s, _, _ = src_model(xb)
             loss_ce = criterion_cls(logits_s, yb)
 
-            # --- 目标域 InfoMax (只更新 classifier) ---
-            with torch.no_grad():
-                _, f_t, _ = src_model(xt)
-            logits_t = src_model.classifier(f_t.detach())  # forward 只过 classifier
+            # --- 目标域 InfoMax ---
+            logits_t, f_t, _ = src_model(xt)
             loss_im, h_cond, h_marg = infomax_loss_from_logits(
                 logits_t, T=im_T, marg_weight=im_marg_w
             )
@@ -115,7 +115,6 @@ def pretrain_source_classifier(
             scheduler.step()
 
     return src_model
-
 
 
 # 阶段2 —— ADDA 对抗 + InfoMax
@@ -313,12 +312,12 @@ def train_adda_infomax_lmmd(
                 best_loss = scr
                 best_state = copy.deepcopy(tgt_model.state_dict())
 
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T185_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        src_cls = nn.CrossEntropyLoss()
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(tgt_model, src_cls, test_loader, device)
+        # print("[INFO] Evaluating on target test set...")
+        # target_test_path = '/content/datasets/target/test/HC_T185_RP.txt'
+        # test_dataset = PKLDataset(target_test_path)
+        # src_cls = nn.CrossEntropyLoss()
+        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        # general_test_model(tgt_model, src_cls, test_loader, device)
 
         if best_state is not None:
             tgt_model.load_state_dict(best_state)
@@ -327,7 +326,7 @@ def train_adda_infomax_lmmd(
 
 
 if __name__ == "__main__":
-    with open("../configs/default.yaml", 'r') as f:
+    with open("/content/github/configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = 64
     lr_pre = 0.0009494768641358269
@@ -341,16 +340,16 @@ if __name__ == "__main__":
     num_epochs = 15
     pre_epochs = 6
 
-    files = [185]
-    # files = [185, 188, 191, 194, 197]
+    # files = [185]
+    files = [185, 188, 191, 194, 197]
     for file in files:
-        src_path = '../datasets/source/train/DC_T197_RP.txt'
-        tgt_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        tgt_test = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
+        src_path = '/content/datasets/source/train/DC_T197_RP.txt'
+        tgt_path = '/content/datasets/target/train/HC_T{}_RP.txt'.format(file)
+        tgt_test = '/content/datasets/target/test/HC_T{}_RP.txt'.format(file)
 
         print(f"[INFO] Loading HC_T{file} ...")
 
-        for run_id in range(5):
+        for run_id in range(10):
             print(f"\n========== RUN {run_id} (ADDA) ==========")
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -381,11 +380,11 @@ if __name__ == "__main__":
                 src_model, tgt_model, src_loader, tgt_loader, device,
                 num_epochs=num_epochs, num_classes=10, batch_size=bs,
                 # 判别器/优化器
-                lr_ft=lr, lr_d=lr * 0.5, wd=wd, d_steps=1, ft_steps=2,
+                lr_ft=lr, lr_d=lr * 0.5, wd=wd, d_steps=1, ft_steps=1,
                 # InfoMax
                 im_T=1.0, im_weight=0.8, im_marg_w=1.0,
                 # LMMD
-                lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.35
+                lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.5
             )
 
             print("[INFO] Evaluating on target test set...")

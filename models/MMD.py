@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-
+import torch.nn as nn
 
 #  Weighted Class Conditional MMD (Multi-core RBF)
 def _pairwise_sq_dists(a, b):
@@ -118,3 +118,62 @@ def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
     h_cond = entropy_mean(p)  # Skalar, Schätzung der bedingten Entropie
     h_marg = entropy_marginal(p)  # Schätzung der marginalen Entropie
     return h_cond - marg_weight * h_marg, h_cond.detach(), h_marg.detach()
+
+
+
+
+class MultiPrototypes(nn.Module):
+    def __init__(self, num_classes, feat_dim, num_protos=3, momentum=0.95):
+        super().__init__()
+        self.num_classes = num_classes
+        self.num_protos = num_protos
+        self.m = float(momentum)
+        # [C, K, d]
+        self.register_buffer('proto', torch.zeros(num_classes, num_protos, feat_dim))
+
+    @torch.no_grad()
+    def update(self, feats, labels, weights=None):
+        if feats.numel() == 0:
+            return
+        device = feats.device  # 保持和输入特征一致
+        for c in labels.unique():
+            mask = (labels == c)
+            if mask.sum() == 0: continue
+            vec = feats[mask].mean(dim=0)
+
+            # 确保 proto 在同一个 device
+            proto_c = self.proto[c].to(device)
+
+            sims = F.cosine_similarity(proto_c, vec.unsqueeze(0), dim=1)  # [K]
+            k = sims.argmax().item()
+
+            # 更新时也要保持 device 一致
+            self.proto[c, k] = (
+                    self.m * self.proto[c, k].to(device) + (1 - self.m) * vec
+            )
+
+    def supcon_logits(self, feats, tau=0.1, agg="max"):
+        """
+        feats: [N, d]
+        return: [N, C]
+        """
+        f = F.normalize(feats, dim=1, eps=1e-8)             # [N, d]
+        p = F.normalize(self.proto.to(feats.device), dim=2, eps=1e-8)      # [C, K, d]
+
+        # [N, d] @ [C*K, d]^T -> [N, C*K]
+        logits_all = f @ p.reshape(-1, p.size(-1)).t()
+        logits_all = logits_all / float(tau)
+
+        # reshape -> [N, C, K]
+        logits_all = logits_all.view(feats.size(0), self.num_classes, self.num_protos)
+
+        # 聚合
+        if agg == "max":
+            logits = logits_all.max(dim=2).values
+        elif agg == "mean":
+            logits = logits_all.mean(dim=2)
+        elif agg == "lse":  # log-sum-exp
+            logits = torch.logsumexp(logits_all, dim=2)
+        else:
+            raise ValueError(f"Unknown agg={agg}")
+        return logits

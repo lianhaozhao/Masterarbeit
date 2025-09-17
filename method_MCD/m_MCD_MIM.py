@@ -13,10 +13,26 @@ from models.MMD import infomax_loss_from_logits
 
 
 # MCD 的分歧度量
-def discrepancy(logits1, logits2, reduction='mean'):
-    p1, p2 = F.softmax(logits1, dim=1), F.softmax(logits2, dim=1)
-    d = (p1 - p2).abs().sum(1)
-    return d.mean() if reduction == 'mean' else d.sum() if reduction == 'sum' else d
+def entropy(p, eps=1e-8):
+    p = p.clamp(min=eps)
+    return -(p * p.log()).sum()
+
+def mutual_information(p1, p2, eps=1e-8):
+    """
+    估计 C1/C2 输出的互信息 I(Y1;Y2)  Mutual Information Minimization
+    p1, p2: [B, C] softmax 概率
+    """
+    B, C = p1.size()
+    p1_mean = p1.mean(0)          # [C]
+    p2_mean = p2.mean(0)          # [C]
+    joint = torch.einsum('bi,bj->ij', p1, p2) / B  # [C, C]
+
+    H1 = entropy(p1_mean)
+    H2 = entropy(p2_mean)
+    H12 = entropy(joint.view(-1))
+
+    return H1 + H2 - H12   # I(Y1;Y2)
+
 
 #  评估（给出 C1/C2/Ensemble）
 @torch.no_grad()
@@ -105,13 +121,17 @@ def train_mcd(model, src_loader, tgt_loader, device,
             model.c2.train()
             for _ in range(nB):
                 optim_C.zero_grad()
-                l1t = model.c1(ft); l2t = model.c2(ft)
-                disc_t = discrepancy(l1t, l2t, 'mean')
+                l1t = model.c1(ft);
+                l2t = model.c2(ft)
+                p1, p2 = F.softmax(l1t, dim=1), F.softmax(l2t, dim=1)
+                mi = mutual_information(p1, p2)
 
-                # 同时维持源域能力，避免崩坏（源域 CE）
+                # 同时维持源域能力
                 ls1_b, ls2_b = model.c1(fs_b), model.c2(fs_b)
                 loss_src_b = F.cross_entropy(ls1_b, ys) + F.cross_entropy(ls2_b, ys)
-                lossB = loss_src_b - lambda_dis * disc_t   # 最小化该式 => 最大化分歧
+
+                # 目标：保持源域性能，同时最大化 C1/C2 在目标域的分歧 (最小化互信息)
+                lossB = loss_src_b - lambda_dis * mi
                 lossB.backward(); optim_C.step()
                 sumB += lossB.item()
             countB += nB
@@ -129,12 +149,19 @@ def train_mcd(model, src_loader, tgt_loader, device,
                 optim_G.zero_grad()
                 ft_c = model.feature_extractor(xt)
                 lt1_c, lt2_c = model.c1(ft_c), model.c2(ft_c)
+                p1_c, p2_c = F.softmax(lt1_c, dim=1), F.softmax(lt2_c, dim=1)
+
+                mi_c = mutual_information(p1_c, p2_c)
+
+                # InfoMax 正则（让预测更 confident 但不塌缩）
                 loss_im_1, _, _ = infomax_loss_from_logits(lt1_c, T=1, marg_weight=1)
                 loss_im_2, _, _ = infomax_loss_from_logits(lt2_c, T=1, marg_weight=1)
                 loss_im = 0.5 * loss_im_1 + 0.5 * loss_im_2
-                disc_c = discrepancy(lt1_c, lt2_c, 'mean')
-                lossC = lambda_dis * disc_c + loss_im
-                lossC.backward(); optim_G.step()
+
+                # 最小化互信息 + InfoMax
+                lossC = lambda_dis * mi_c + loss_im
+                lossC.backward()
+                optim_G.step()
                 sumC += lossC.item()
             countC += nC
             for p in model.c1.parameters(): p.requires_grad_(True)
@@ -153,7 +180,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
         test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
 
         ACC_A, ACC_B, ACC_AVG = MCD_evaluate(model, test_loader, device)
-        print(f"ACC_A: {ACC_A:0.4f}, ACC_B: {ACC_B:0.4f}, ACC_AVG: {ACC_AVG:0.4f}")
+        print(f"ACC_A: {ACC_A:.04f}, ACC_B: {ACC_B:.04f}, ACC_AVG: {ACC_AVG:.04f}")
 
 
     # if best_state is not None:
@@ -171,8 +198,8 @@ if __name__ == "__main__":
 
     # 数据路径
     src_path = "../datasets/source/train/DC_T197_RP.txt"
-    tgt_path = "../datasets/target/train/HC_T194_RP.txt"
-    tgt_test = "../datasets/target/test/HC_T194_RP.txt"
+    tgt_path = "../datasets/target/train/HC_T185_RP.txt"
+    tgt_test = "../datasets/target/test/HC_T185_RP.txt"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -191,7 +218,7 @@ if __name__ == "__main__":
     model = train_mcd(
         model, src_loader, tgt_loader, device,
         num_epochs=20, lr_g=lr, lr_c=lr, weight_decay=wd,
-        lambda_dis=1.0, nB=1, nC=1
+        lambda_dis=1.0, nB=1, nC=2
     )
 
     print("[INFO] Evaluating on target test set...")

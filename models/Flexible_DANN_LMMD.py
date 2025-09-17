@@ -37,13 +37,13 @@ class Flexible_DANN(nn.Module):
         self.feature_extractor = Flexible_CNN_FeatureExtractor(num_layers, start_channels, kernel_size, cnn_act)
         feature_dim = self.feature_extractor.feature_dim
         self.classifier = Flexible_CNN_Classifier(feature_dim, num_classes)
-        self.domain_classifier = DomainClassifier(512)
+        self.domain_classifier = DomainClassifier(feature_dim)
         self.lambda_ = lambda_
         self.feature_reducer = nn.Sequential(
-            nn.Linear(feature_dim, 512, bias=False),
-            nn.LayerNorm(512),
+            nn.Linear(feature_dim, 256, bias=False),
+            nn.LayerNorm(256),
             nn.LeakyReLU(0.01, inplace=True),
-            nn.Dropout(p=0.1) ,
+            nn.Dropout(p=0.1),
         )
         for m in self.feature_reducer:
             if isinstance(m, nn.Linear):
@@ -56,9 +56,9 @@ class Flexible_DANN(nn.Module):
         reduced_features = self.feature_reducer(features)
         class_outputs = self.classifier(features)
         if grl:
-            reversed_features = grad_reverse(reduced_features, self.lambda_)
+            reversed_features = grad_reverse(features, self.lambda_)
         else:
-            reversed_features = reduced_features
+            reversed_features = features
         domain_outputs = self.domain_classifier(reversed_features)
 
         return class_outputs, domain_outputs, reduced_features
