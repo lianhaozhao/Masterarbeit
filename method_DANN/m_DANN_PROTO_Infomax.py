@@ -304,8 +304,8 @@ if __name__ == "__main__":
     with open("/content/github/configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = 64
-    lr = 0.0003561101467640373
-    wd = 0.00025541619729977776
+    lr = 0.0004490552594198228
+    wd = 0.00023044104330072158
     num_layers = cfg['num_layers']
     ksz = cfg['kernel_size']
     sc = cfg['start_channels']

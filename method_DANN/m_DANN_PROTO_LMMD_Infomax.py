@@ -151,7 +151,7 @@ def train_dann_infomax_lmmd(model,
             loss_im = im_weight * loss_im
 
             # 3)
-            if tgt_pl_x is not None and lambda_proto_eff > 0:
+            if tgt_pl_x is not None and lambda_mmd_eff > 0:
                 _, _, feat_tgt_pl = model(tgt_pl_x, grl=False)
                 proto_module.update(feat_tgt_pl, tgt_pl_y)
                 logits = proto_module.supcon_logits(feat_tgt_pl, tau=0.1, agg="mean")
