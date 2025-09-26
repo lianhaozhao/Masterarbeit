@@ -106,8 +106,8 @@ class Flexible_MCD(nn.Module):
             kernel_size=kernel_size, cnn_act=cnn_act, input_size=input_size
         )
         feature_dim = self.feature_extractor.feature_dim
-        self.c1 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
-        self.c2 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=p, temperature=temperature)
+        self.c1 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=0.1, temperature=temperature)
+        self.c2 = Flexible_CNN_Classifier(feature_dim, num_classes=num_classes, hidden=hidden, p=0.3, temperature=temperature)
         self.feature_reducer = nn.Sequential(
             nn.Linear(feature_dim, 256, bias=False),
             nn.LayerNorm(256),
@@ -120,7 +120,6 @@ class Flexible_MCD(nn.Module):
 
     def forward(self, x):
         features = self.feature_extractor(x)
-        reduced_features = self.feature_reducer(features)
         l1 = self.c1(features)
         l2 = self.c2(features)
-        return l1, l2, reduced_features
+        return l1, l2, features
