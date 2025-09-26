@@ -120,6 +120,7 @@ class Flexible_MCD(nn.Module):
 
     def forward(self, x):
         features = self.feature_extractor(x)
+        reduced_features = self.feature_reducer(features)
         l1 = self.c1(features)
         l2 = self.c2(features)
-        return l1, l2, features
+        return l1, l2, reduced_features
