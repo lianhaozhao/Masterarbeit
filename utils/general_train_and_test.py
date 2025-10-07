@@ -3,6 +3,9 @@ import os
 from tqdm import tqdm
 import torch.nn.functional as F
 import copy
+import numpy as np
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
 
 def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
                 num_epochs=20, early_stopping_patience=3, scheduler=None, out_path=None):
@@ -236,3 +239,84 @@ def pseudo_soft_test_model(model, criterion, pseudo_test_loader, device, use_sof
         print(f"- Test KL Divergence: {avg_loss:.6f}")
     else:
         print(f"- Test Loss: {avg_loss:.6f}, Acc: {correct / total_samples:.4f}")
+def general_test_model_plot(model, criterion, general_test_loader, device,
+                       save_fig=False, fig_path="./confusion_matrix.png",
+                       normalize=True):
+    """
+    Evaluates the model on a labeled test set using standard classification metrics,
+    and optionally plots a confusion matrix (normalized by row percentages).
+
+    Args:
+        model (nn.Module): Trained model to evaluate.
+        criterion (nn.Module): Loss function (e.g., CrossEntropyLoss).
+        general_test_loader (DataLoader): DataLoader containing test data with ground truth labels.
+        device (torch.device): Device for evaluation ('cuda' or 'cpu').
+        save_fig (bool): Whether to save the confusion matrix figure instead of showing it.
+        fig_path (str): Path to save the confusion matrix image if save_fig=True.
+        normalize (bool): Whether to normalize the confusion matrix by true label counts (row-wise).
+
+    Returns:
+        val_loss, val_accuracy, cm (the raw confusion matrix, not normalized)
+    """
+    model.eval()
+    val_loss = 0.0
+    correct_val = 0
+    total_val_samples = 0
+    preds_list, trues_list = [], []
+
+    with torch.no_grad():
+        for inputs, labels in general_test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            outputs = outputs[0] if isinstance(outputs, tuple) else outputs
+            loss = criterion(outputs, labels)
+
+            batch_size_actual = inputs.size(0)
+            val_loss += loss.item() * batch_size_actual
+            total_val_samples += batch_size_actual
+
+            _, preds = torch.max(outputs, 1)
+            correct_val += (preds == labels).sum().item()
+
+            preds_list.append(preds.cpu().numpy())
+            trues_list.append(labels.cpu().numpy())
+
+    preds_all = np.concatenate(preds_list)
+    trues_all = np.concatenate(trues_list)
+
+    val_loss /= total_val_samples
+    val_accuracy = correct_val / total_val_samples
+    print(f"- test Loss: {val_loss:.6f}, test Acc: {val_accuracy:.4f}")
+
+    # ======== 绘制混淆矩阵 ========
+    class_labels = ['R05', 'R10', 'R15', 'R20', 'R25', 'R30', 'R35', 'R40', 'R45', 'R50']
+    cm = confusion_matrix(trues_all, preds_all, labels=np.arange(len(class_labels)))
+
+    if normalize:
+        cm_normalized = cm.astype('float') / cm.sum(axis=1, keepdims=True)
+        cm_display = cm_normalized * 100  # 转为百分比
+        fmt = ".1f"
+        title_suffix = " (Normalized %)"
+    else:
+        cm_display = cm
+        fmt = "d"
+        title_suffix = ""
+
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm_display, display_labels=class_labels)
+    disp.plot(cmap='Blues', xticks_rotation=45, values_format=fmt)
+    plt.title("Confusion Matrix" + title_suffix)
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+
+    if normalize:
+        plt.colorbar(label="Percentage (%)")
+
+    if save_fig:
+        os.makedirs(os.path.dirname(fig_path), exist_ok=True)
+        plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+        print(f"[INFO] Confusion matrix saved to: {fig_path}")
+        plt.close()
+    else:
+        plt.show()
+
+    return val_loss, val_accuracy, cm

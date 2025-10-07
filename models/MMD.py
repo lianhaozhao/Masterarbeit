@@ -11,11 +11,10 @@ def _pairwise_sq_dists(a, b):
 
 def _mk_kernel(a, b, gammas):
     d2 = _pairwise_sq_dists(a, b).clamp_min(0)
-    k = 0.0
-    M = max(1, len(gammas))
-    for g in gammas:
-        k = k + torch.exp(-float(g) * d2)
-    return k / M
+    g = torch.as_tensor(gammas, dtype=d2.dtype, device=d2.device).view(-1, 1, 1)  # [G,1,1]
+    K = torch.exp(-g * d2.unsqueeze(0))  # [G, m, n]
+    return K.mean(dim=0)                 # [m, n]
+
 
 def _weighted_mean_kernel(K, w_row, w_col):
     # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))
