@@ -40,25 +40,20 @@ class Flexible_DANN(nn.Module):
         self.domain_classifier = DomainClassifier(feature_dim)
         self.lambda_ = lambda_
         self.feature_reducer = nn.Sequential(
-            nn.Linear(feature_dim, 256, bias=False),
-            nn.LayerNorm(256),
-            nn.LeakyReLU(0.01, inplace=True),
-            nn.Dropout(p=0.1),
+            nn.AdaptiveAvgPool1d(1),  # [B, C, L] → [B, C, 1]
+            nn.Flatten(),  # [B, C, 1] → [B, C]
         )
-        for m in self.feature_reducer:
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_normal_(m.weight)
 
 
 
     def forward(self, x, grl=True):
-        features = self.feature_extractor(x)
-        reduced_features = self.feature_reducer(features)
-        class_outputs = self.classifier(features)
+        conv_out, flat_feat = self.feature_extractor(x, return_conv=True)
+        reduced_features = self.feature_reducer(conv_out)
+        class_outputs = self.classifier(flat_feat)
         if grl:
-            reversed_features = grad_reverse(features, self.lambda_)
+            reversed_features = grad_reverse(flat_feat, self.lambda_)
         else:
-            reversed_features = features
+            reversed_features = flat_feat
         domain_outputs = self.domain_classifier(reversed_features)
 
         return class_outputs, domain_outputs, reduced_features

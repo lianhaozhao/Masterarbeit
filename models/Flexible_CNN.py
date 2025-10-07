@@ -43,15 +43,18 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
             in_channels = out_channels
 
         self.conv = nn.Sequential(*layers)
+        self.final_channels = out_channels
         with torch.no_grad():
             dummy_input = torch.randn(1, 1, input_size)  # B=1, C=1, L=input_size
             out = self.conv(dummy_input)
             self.feature_dim = out.shape[1] * out.shape[2]  # C × L
 
-    def forward(self, x):
-        x = self.conv(x)  # (B, C, 1)
-        x = x.view(x.size(0), -1)  # 展平为 (B, C)
-        return x
+    def forward(self, x, return_conv=False):
+        conv_out = self.conv(x)               # [B, C, L]
+        flat_feat = conv_out.flatten(1)       # [B, C×L]
+        if return_conv:
+            return conv_out, flat_feat
+        return flat_feat
 
 
 
