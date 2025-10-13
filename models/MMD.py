@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+import numpy as np
 
 #  Weighted Class Conditional MMD (Multi-core RBF)
 def _pairwise_sq_dists(a, b):
@@ -118,7 +119,35 @@ def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
     h_marg = entropy_marginal(p)  # Schätzung der marginalen Entropie
     return h_cond - marg_weight * h_marg, h_cond.detach(), h_marg.detach()
 
+def infomax_loss_from_logits_2(
+    logits,
+    features=None,
+    T=1.0,
+    marg_weight=1.0,
+    feat_weight=0.05,
+    dynamic_balance=False,
+    epoch=None,
+    num_epochs=None,
+):
+    p = F.softmax(logits / T, dim=1)
+    p = p / (p.sum(dim=1, keepdim=True) + 1e-8)
 
+    h_cond = entropy_mean(p)
+    h_marg = entropy_marginal(p)
+
+    feat_div = 0.0
+    if features is not None:
+        f_norm = F.normalize(features, dim=1)
+        feat_div = f_norm.std(dim=0).mean()
+
+    if dynamic_balance and (epoch is not None and num_epochs is not None):
+        # Sigmoid 调度：平滑增长
+        progress = 1 / (1 + np.exp(-10 * (epoch / num_epochs - 0.5)))
+        feat_weight = feat_weight * progress
+        marg_weight = marg_weight * (1.0 + 0.5 * progress)
+
+    loss = h_cond - marg_weight * h_marg - feat_weight * feat_div
+    return loss, h_cond.detach(), h_marg.detach()
 
 
 class MultiPrototypes(nn.Module):
