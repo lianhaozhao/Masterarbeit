@@ -106,12 +106,13 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
                   save_path: str, title_prefix: str = "epoch",
                   use_vivid: bool = False):
     """
-    绘制 t-SNE 与 PCA 2D 图，各存为 *_tsne.png / *_pca.png
-    颜色固定映射 0..9，并在图例中显示 R05..R50
+    绘制 t-SNE 与 PCA 2D 图，颜色表示类别；
+    Source 域颜色更浅（淡化），Target 域更饱和；
+    域与类别在图例中区分。
     """
     cmap = VIVID10 if use_vivid else cmap10()
 
-    # ---- 先 PCA 到 50 维，再做 t-SNE（常规更稳做法） ----
+    # ---- PCA 降维到 50 再做 t-SNE ----
     pca50 = PCA(n_components=min(50, feat_s.shape[1]))
     z_s = pca50.fit_transform(feat_s)
     z_t = pca50.transform(feat_t)
@@ -122,42 +123,69 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     ns = z_s.shape[0]
     z_s2, z_t2 = z[:ns], z[ns:]
 
-    # t-SNE 图
-    plt.figure(figsize=(7, 6))
-    plt.scatter(z_s2[:, 0], z_s2[:, 1], s=8,  c=y_s, marker='o', alpha=0.9,
-                cmap=cmap, vmin=0, vmax=9, edgecolors='none', label="Source")
-    plt.scatter(z_t2[:, 0], z_t2[:, 1], s=12, c=y_t, marker='^', alpha=0.9,
-                cmap=cmap, vmin=0, vmax=9, edgecolors='none', label="Target")
+    # ==========================================================
+    #  t-SNE 图
+    # ==========================================================
+    plt.figure(figsize=(9, 7))
+    # Source 域（颜色更淡）
+    plt.scatter(z_s2[:, 0], z_s2[:, 1],
+                s=35, c=y_s, marker='o',
+                cmap=cmap, vmin=0, vmax=9,
+                alpha=0.45, edgecolors='none', label="Source")
+    # Target 域（颜色饱和）
+    plt.scatter(z_t2[:, 0], z_t2[:, 1],
+                s=55, c=y_t, marker='^',
+                cmap=cmap, vmin=0, vmax=9,
+                alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
 
-    # 仅为实际出现的类生成图例
+    # 图例
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
-    handles = [plt.Line2D([0], [0], marker='s', linestyle='None',
-                          color=cmap(i), label=CLASS_NAMES[i]) for i in present]
-    plt.legend(handles=handles, frameon=False, ncol=5, fontsize=9,
-               loc='best', title="Classes")
-    plt.title(f"{title_prefix} | t-SNE")
+    class_handles = [
+        plt.Line2D([0], [0], marker='s', linestyle='None',
+                   color=cmap(i), label=CLASS_NAMES[i], markersize=8)
+        for i in present
+    ]
+    domain_handles = [
+        plt.Line2D([0], [0], marker='o', color='gray', linestyle='None',
+                   label='Source (淡色)', markersize=7, alpha=0.5),
+        plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
+                   label='Target (饱和)', markersize=8, alpha=0.9)
+    ]
+    handles = domain_handles + class_handles
+    plt.legend(handles=handles, frameon=True, ncol=5, fontsize=9,
+               loc='best', title="Domains & Classes")
+
+    plt.title(f"{title_prefix} | t-SNE", fontsize=12, pad=8)
     plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_tsne.png"), dpi=220)
+    plt.savefig(save_path.replace(".png", "_tsne.png"), dpi=240)
     plt.close()
 
-    # PCA 2D 图（线性投影）
+    # ==========================================================
+    #  PCA 图
+    # ==========================================================
     p2 = PCA(n_components=2)
     zs = p2.fit_transform(feat_s)
     zt = p2.transform(feat_t)
 
-    plt.figure(figsize=(7, 6))
-    plt.scatter(zs[:, 0], zs[:, 1], s=8,  c=y_s, marker='o', alpha=0.9,
-                cmap=cmap, vmin=0, vmax=9, edgecolors='none', label="Source")
-    plt.scatter(zt[:, 0], zt[:, 1], s=12, c=y_t, marker='^', alpha=0.9,
-                cmap=cmap, vmin=0, vmax=9, edgecolors='none', label="Target")
-    handles = [plt.Line2D([0], [0], marker='s', linestyle='None',
-                          color=cmap(i), label=CLASS_NAMES[i]) for i in present]
-    plt.legend(handles=handles, frameon=False, ncol=5, fontsize=9,
-               loc='best', title="Classes")
-    plt.title(f"{title_prefix} | PCA")
+    plt.figure(figsize=(9, 7))
+    plt.scatter(zs[:, 0], zs[:, 1],
+                s=35, c=y_s, marker='o',
+                cmap=cmap, vmin=0, vmax=9,
+                alpha=0.45, edgecolors='none', label="Source")
+    plt.scatter(zt[:, 0], zt[:, 1],
+                s=55, c=y_t, marker='^',
+                cmap=cmap, vmin=0, vmax=9,
+                alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
+
+    handles = domain_handles + class_handles
+    plt.legend(handles=handles, frameon=True, ncol=5, fontsize=9,
+               loc='best', title="Domains & Classes")
+
+    plt.title(f"{title_prefix} | PCA", fontsize=12, pad=8)
     plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_pca.png"), dpi=220)
+    plt.savefig(save_path.replace(".png", "_pca.png"), dpi=240)
     plt.close()
+
 
 
 def plot_class_center_heatmap(feat_s: np.ndarray, y_s: np.ndarray,
