@@ -37,7 +37,7 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
             out_channels = start_channels * (2 ** i)
             padding = (kernel_size - 1) // 2
             layers.append(nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding,bias=False))
-            layers.append(nn.GroupNorm(num_groups=min(32, out_channels // 4), num_channels=out_channels))
+            layers.append(nn.GroupNorm(num_groups=out_channels // 2, num_channels=out_channels))
             layers.append(activation_fn())
             layers.append(nn.MaxPool1d(kernel_size=2))
             in_channels = out_channels
