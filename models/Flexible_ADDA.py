@@ -10,10 +10,10 @@ class Flexible_ADDA(nn.Module):
         feature_dim = self.feature_extractor.feature_dim
         self.classifier = Flexible_CNN_Classifier(feature_dim, num_classes)
         self.feature_reducer = nn.Sequential(
-            nn.AdaptiveAvgPool1d(8),  # 保留少量局部结构
-            nn.Flatten(),  # [B, C*4]
-            nn.Linear(1024, 256),  # 可学习压缩
-            nn.LayerNorm(256)
+            nn.Linear(feature_dim, 256, bias=False),
+            nn.LayerNorm(256),
+            nn.LeakyReLU(0.01, inplace=True),
+            nn.Dropout(p=0.1),
         )
 
     def forward(self, x):
