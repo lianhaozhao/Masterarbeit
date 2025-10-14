@@ -129,14 +129,14 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     plt.figure(figsize=(9, 7))
     # Source 域（颜色更淡）
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
-                s=35, c=y_s, marker='o',
+                s=30, c=y_s, marker='o',
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.45, edgecolors='none', label="Source")
     # Target 域（颜色饱和）
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
-                s=45, c=y_t, marker='^',
+                s=35, c=y_t, marker='^',
                 cmap=cmap, vmin=0, vmax=9,
-                alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
+                alpha=0.8, edgecolors='black', linewidths=0.3, label="Target")
 
     # 图例
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))

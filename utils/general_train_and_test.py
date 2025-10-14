@@ -4,9 +4,9 @@ from tqdm import tqdm
 import torch.nn.functional as F
 import copy
 import numpy as np
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, classification_report
 import matplotlib.pyplot as plt
-
+import pandas as pd
 def pseudo_train_model(model, pseudo_loader,optimizer, criterion, device,
                 num_epochs=20, early_stopping_patience=3, scheduler=None, out_path=None):
     """
@@ -240,23 +240,15 @@ def pseudo_soft_test_model(model, criterion, pseudo_test_loader, device, use_sof
     else:
         print(f"- Test Loss: {avg_loss:.6f}, Acc: {correct / total_samples:.4f}")
 def general_test_model_plot(model, criterion, general_test_loader, device,
-                       save_fig=False, fig_path="./confusion_matrix.png",
-                       normalize=True):
+                            save_fig=False, fig_path="./confusion_matrix.png",
+                            save_table=True, table_path="./test_stats.csv",
+                            save_cm_table=True, cm_table_path="./confusion_matrix.csv"):
     """
-    Evaluates the model on a labeled test set using standard classification metrics,
-    and optionally plots a confusion matrix (normalized by row percentages).
-
-    Args:
-        model (nn.Module): Trained model to evaluate.
-        criterion (nn.Module): Loss function (e.g., CrossEntropyLoss).
-        general_test_loader (DataLoader): DataLoader containing test data with ground truth labels.
-        device (torch.device): Device for evaluation ('cuda' or 'cpu').
-        save_fig (bool): Whether to save the confusion matrix figure instead of showing it.
-        fig_path (str): Path to save the confusion matrix image if save_fig=True.
-        normalize (bool): Whether to normalize the confusion matrix by true label counts (row-wise).
+    Evaluates the model on a labeled test set, plots and saves raw (non-normalized) confusion matrix,
+    and saves classification statistics.
 
     Returns:
-        val_loss, val_accuracy, cm (the raw confusion matrix, not normalized)
+        val_loss, val_accuracy, cm (raw confusion matrix), df_report, df_cm_raw (pandas DataFrame)
     """
     model.eval()
     val_loss = 0.0
@@ -288,35 +280,41 @@ def general_test_model_plot(model, criterion, general_test_loader, device,
     val_accuracy = correct_val / total_val_samples
     print(f"- test Loss: {val_loss:.6f}, test Acc: {val_accuracy:.4f}")
 
-    # ======== 绘制混淆矩阵 ========
+    # ======== 混淆矩阵（原始计数） ========
     class_labels = ['R05', 'R10', 'R15', 'R20', 'R25', 'R30', 'R35', 'R40', 'R45', 'R50']
     cm = confusion_matrix(trues_all, preds_all, labels=np.arange(len(class_labels)))
 
-    if normalize:
-        cm_normalized = cm.astype('float') / cm.sum(axis=1, keepdims=True)
-        cm_display = cm_normalized * 100  # 转为百分比
-        fmt = ".1f"
-        title_suffix = " (Normalized %)"
-    else:
-        cm_display = cm
-        fmt = "d"
-        title_suffix = ""
-
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm_display, display_labels=class_labels)
-    disp.plot(cmap='Blues', xticks_rotation=45, values_format=fmt)
-    plt.title("Confusion Matrix" + title_suffix)
+    # ======== 绘制 ========
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
+    disp.plot(cmap='Blues', xticks_rotation=45, values_format="d")
+    plt.title(f"Confusion Matrix (Raw Counts) | Acc={val_accuracy:.4f}")
     plt.xlabel("Predicted Label")
     plt.ylabel("True Label")
-
-    if normalize:
-        plt.colorbar(label="Percentage (%)")
 
     if save_fig:
         os.makedirs(os.path.dirname(fig_path), exist_ok=True)
         plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-        print(f"[INFO] Confusion matrix saved to: {fig_path}")
+        print(f"[INFO] Confusion matrix figure saved to: {fig_path}")
         plt.close()
     else:
         plt.show()
 
-    return val_loss, val_accuracy, cm
+    # ======== 保存混淆矩阵表格 ========
+    df_cm_raw = pd.DataFrame(cm, index=class_labels, columns=class_labels)
+    if save_cm_table:
+        os.makedirs(os.path.dirname(cm_table_path), exist_ok=True)
+        df_cm_raw.to_csv(cm_table_path, float_format="%.0f")
+        print(f"[INFO] Confusion matrix table saved to: {cm_table_path}")
+
+    # ======== 分类报告 ========
+    report_dict = classification_report(
+        trues_all, preds_all, target_names=class_labels, output_dict=True, zero_division=0
+    )
+    df_report = pd.DataFrame(report_dict).transpose()
+
+    if save_table:
+        os.makedirs(os.path.dirname(table_path), exist_ok=True)
+        df_report.to_csv(table_path, float_format="%.4f")
+        print(f"[INFO] Classification report saved to: {table_path}")
+
+    return val_loss, val_accuracy, cm, df_report, df_cm_raw
