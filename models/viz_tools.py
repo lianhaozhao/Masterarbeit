@@ -108,7 +108,7 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     """
     绘制 t-SNE 与 PCA 2D 图，颜色表示类别；
     Source 域颜色更浅（淡化），Target 域更饱和；
-    图例竖直分组：上方显示域，下方显示类别。
+    域与类别在图例中区分。
     """
     cmap = VIVID10 if use_vivid else cmap10()
 
@@ -127,7 +127,6 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     #  t-SNE 图
     # ==========================================================
     plt.figure(figsize=(9, 7))
-
     # Source 域（颜色更淡）
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=35, c=y_s, marker='o',
@@ -139,44 +138,22 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
 
-    # ==========================================================
-    # 图例竖直分组：域（上），类别（下）
-    # ==========================================================
+    # 图例
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
-
-    # 类别图例
     class_handles = [
         plt.Line2D([0], [0], marker='s', linestyle='None',
                    color=cmap(i), label=CLASS_NAMES[i], markersize=8)
         for i in present
     ]
-    # 域图例
     domain_handles = [
         plt.Line2D([0], [0], marker='o', color='gray', linestyle='None',
-                   label='Source (淡色)', markersize=8, alpha=0.5),
+                   label='Source ', markersize=7, alpha=0.5),
         plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
-                   label='Target (饱和)', markersize=9, alpha=0.9)
+                   label='Target ', markersize=8, alpha=0.9)
     ]
-
-    # 先添加域图例（上面）
-    domain_legend = plt.legend(handles=domain_handles,
-                               loc='upper left',
-                               bbox_to_anchor=(1.02, 1.0),
-                               frameon=False,
-                               fontsize=9,
-                               title="Domains",
-                               title_fontsize=10)
-    plt.gca().add_artist(domain_legend)  # 先固定域图例
-
-    # 再添加类别图例（下面）
-    plt.legend(handles=class_handles,
-               loc='upper left',
-               bbox_to_anchor=(1.02, 0.65),
-               frameon=False,
-               fontsize=9,
-               ncol=2,
-               title="Classes",
-               title_fontsize=10)
+    handles = domain_handles + class_handles
+    plt.legend(handles=handles, frameon=True, ncol=5, fontsize=9,
+               loc='best', title="Domains & Classes")
 
     plt.title(f"{title_prefix} | t-SNE", fontsize=12, pad=8)
     plt.tight_layout()
@@ -184,7 +161,7 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     plt.close()
 
     # ==========================================================
-    #  PCA 图（同样逻辑）
+    #  PCA 图
     # ==========================================================
     p2 = PCA(n_components=2)
     zs = p2.fit_transform(feat_s)
@@ -196,28 +173,13 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.45, edgecolors='none', label="Source")
     plt.scatter(zt[:, 0], zt[:, 1],
-                s=45, c=y_t, marker='^',
+                s=55, c=y_t, marker='^',
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
 
-    # 同样的双层 legend
-    domain_legend = plt.legend(handles=domain_handles,
-                               loc='upper left',
-                               bbox_to_anchor=(1.02, 1.0),
-                               frameon=False,
-                               fontsize=9,
-                               title="Domains",
-                               title_fontsize=10)
-    plt.gca().add_artist(domain_legend)
-
-    plt.legend(handles=class_handles,
-               loc='upper left',
-               bbox_to_anchor=(1.02, 0.65),
-               frameon=False,
-               fontsize=9,
-               ncol=2,
-               title="Classes",
-               title_fontsize=10)
+    handles = domain_handles + class_handles
+    plt.legend(handles=handles, frameon=True, ncol=5, fontsize=9,
+               loc='best', title="Domains & Classes")
 
     plt.title(f"{title_prefix} | PCA", fontsize=12, pad=8)
     plt.tight_layout()
