@@ -294,7 +294,6 @@ def general_test_model_plot(model, criterion, general_test_loader, device,
     if save_fig:
         os.makedirs(os.path.dirname(fig_path), exist_ok=True)
         plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-        print(f"[INFO] Confusion matrix figure saved to: {fig_path}")
         plt.close()
     else:
         plt.show()
@@ -304,7 +303,6 @@ def general_test_model_plot(model, criterion, general_test_loader, device,
     if save_cm_table:
         os.makedirs(os.path.dirname(cm_table_path), exist_ok=True)
         df_cm_raw.to_csv(cm_table_path, float_format="%.0f")
-        print(f"[INFO] Confusion matrix table saved to: {cm_table_path}")
 
     # ======== 分类报告 ========
     report_dict = classification_report(
@@ -315,6 +313,5 @@ def general_test_model_plot(model, criterion, general_test_loader, device,
     if save_table:
         os.makedirs(os.path.dirname(table_path), exist_ok=True)
         df_report.to_csv(table_path, float_format="%.4f")
-        print(f"[INFO] Classification report saved to: {table_path}")
 
     return val_loss, val_accuracy, cm, df_report, df_cm_raw
