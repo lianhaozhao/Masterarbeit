@@ -48,11 +48,9 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
             out = self.conv(dummy_input)
             self.feature_dim = out.shape[1] * out.shape[2]  # C × L
 
-    def forward(self, x, return_conv=False):
+    def forward(self, x):
         conv_out = self.conv(x)               # [B, C, L]
         flat_feat = conv_out.flatten(1)       # [B, C×L]
-        if return_conv:
-            return conv_out, flat_feat
         return flat_feat
 
 

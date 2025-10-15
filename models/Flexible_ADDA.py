@@ -17,9 +17,9 @@ class Flexible_ADDA(nn.Module):
         )
 
     def forward(self, x):
-        conv_out, flat_feat = self.feature_extractor(x, return_conv=True)
+        flat_feat = self.feature_extractor(x)
         class_outputs = self.classifier(flat_feat)
-        reduced_features = self.feature_reducer(conv_out)  # [B, C]
+        reduced_features = self.feature_reducer(flat_feat)  # [B, C]
         return class_outputs, flat_feat, reduced_features
 
 
