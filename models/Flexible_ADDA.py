@@ -15,6 +15,9 @@ class Flexible_ADDA(nn.Module):
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(p=0.1),
         )
+        for m in self.feature_reducer:
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_normal_(m.weight)
 
     def forward(self, x):
         flat_feat = self.feature_extractor(x)
