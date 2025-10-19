@@ -13,18 +13,28 @@ import numpy as np
 # =========================
 CLASS_NAMES = [f"R{5*i+5:02d}" for i in range(10)]  # ['R05','R10',...,'R50']
 
-def cmap10():
-    """使用 matplotlib 自带的高对比 10 色"""
-    return plt.get_cmap("tab10")
 
-# 若想用自定义鲜艳配色，注释上面行并启用下方：
-VIVID10 = ListedColormap([
-    "#E6194B", "#3CB44B", "#0082C8", "#F58231", "#911EB4",
-    "#46F0F0", "#F032E6", "#D2F53C", "#FABEBE", "#008080",
-])
+def corporate_palette_10():
+    """增强区分度的品牌配色 (10 类)"""
+    base_rgb = [
+        (0, 64, 112),     # 深蓝
+        (0, 105, 170),    # 亮蓝（增强对比）
+        (0, 159, 227),    # 天蓝
+        (0, 180, 140),    # 青绿
+        (126, 195, 153),  # 浅绿
+        (201, 212, 0),    # 黄绿
+        (253, 202, 0),    # 明黄
+        (236, 97, 159),   # 洋红
+        (255, 128, 64),   # 橙色
+        (160, 90, 190),   # 紫色
+    ]
+    colors = [(r/255, g/255, b/255) for r, g, b in base_rgb]
+    return ListedColormap(colors)
 
 
-# 基础工具
+# =========================
+# 工具函数
+# =========================
 def ensure_dir(p: str) -> str:
     os.makedirs(p, exist_ok=True)
     return p
@@ -32,13 +42,7 @@ def ensure_dir(p: str) -> str:
 
 @torch.no_grad()
 def collect_feats(model, loader, device, get_label: bool = True, pred_T: float = 1.0):
-    """
-    从 loader 收集类特征、标签/伪标签，以及目标域样本的置信度（margin）。
-    返回:
-      feats:  [N, d_feat]  —— forward 第三个返回（feat_c）
-      labels: [N]          —— 源域用真标签，目标域用伪标签
-      weights:[N]          —— 源域为 1；目标域为 softmax margin
-    """
+    """从 DataLoader 收集特征、标签及置信度边界"""
     model.eval()
     all_f, all_y, all_w = [], [], []
     for batch in loader:
@@ -48,12 +52,11 @@ def collect_feats(model, loader, device, get_label: bool = True, pred_T: float =
         else:
             x, y = batch.to(device), None
 
-        logits, _, feat_c = model(x)  # 假定 forward 返回 (cls_out, dom_out, feat_c)
-
-        prob = (logits / pred_T).softmax(dim=1)     # [B,C]
-        conf, y_pred = prob.max(dim=1)              # 伪标签 & top1 概率
-        top2 = prob.topk(2, dim=1).values[:, 1]     # 第二大概率
-        margin = conf - top2                        # 置信边界
+        logits, _, feat_c = model(x)
+        prob = (logits / pred_T).softmax(dim=1)
+        conf, y_pred = prob.max(dim=1)
+        top2 = prob.topk(2, dim=1).values[:, 1]
+        margin = conf - top2
 
         all_f.append(feat_c.detach().cpu())
         if (y is not None) and get_label:
@@ -70,10 +73,7 @@ def collect_feats(model, loader, device, get_label: bool = True, pred_T: float =
 
 
 def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
-    """
-    用二维直方图近似计算 JS 散度（对称，>=0，越小越相似）
-    a, b: [N,2]
-    """
+    """二维直方图近似 JS 散度"""
     eps = 1e-12
     mins = np.minimum(a.min(0), b.min(0))
     maxs = np.maximum(a.max(0), b.max(0))
@@ -96,19 +96,14 @@ def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
     return 0.5 * (KL_PM + KL_QM)
 
 
-# 可视化
-def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
-                  feat_t: np.ndarray, y_t: np.ndarray,
-                  save_path: str, title_prefix: str = "epoch",
-                  use_vivid: bool = False):
-    """
-    绘制 t-SNE 与 PCA 2D 图，颜色表示类别；
-    Source 域颜色更浅（淡化），Target 域更饱和；
-    域与类别在图例中区分。
-    """
-    cmap = VIVID10 if use_vivid else cmap10()
+# =========================
+# 可视化函数
+# =========================
+def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
+    """绘制 t-SNE 和 PCA 可视化图"""
+    cmap = corporate_palette_10()
 
-    # ---- PCA 降维到 50 再做 t-SNE ----
+    # PCA 降维后再做 t-SNE
     pca50 = PCA(n_components=min(50, feat_s.shape[1]))
     z_s = pca50.fit_transform(feat_s)
     z_t = pca50.transform(feat_t)
@@ -119,20 +114,14 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     ns = z_s.shape[0]
     z_s2, z_t2 = z[:ns], z[ns:]
 
-    # ==========================================================
-    #  t-SNE 图
-    # ==========================================================
+    # t-SNE 图
     plt.figure(figsize=(9, 7))
-    # Source 域（颜色更淡）
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
-                s=25, c=y_s, marker='o',
-                cmap=cmap, vmin=0, vmax=9,
-                alpha=0.45, edgecolors='none', label="Source")
-    # Target 域（颜色饱和）
+                s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
+                alpha=0.45, marker='o', label="Source", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
-                s=30, c=y_t, marker='^',
-                cmap=cmap, vmin=0, vmax=9,
-                alpha=0.8, edgecolors='black', linewidths=0.3, label="Target")
+                s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
+                alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
 
     # 图例
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
@@ -147,52 +136,36 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
         plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
                    label='Target ', markersize=8, alpha=0.9)
     ]
-    handles = domain_handles + class_handles
-    plt.legend(handles=handles, frameon=True, ncol=5, fontsize=9,
-               loc='best', title="Domains & Classes")
+    plt.legend(domain_handles + class_handles, frameon=True, ncol=5,
+               fontsize=9, loc='best', title="Domains & Classes")
 
     plt.title(f"{title_prefix} | t-SNE", fontsize=12, pad=8)
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_tsne.png"), dpi=240)
     plt.close()
 
-    # ==========================================================
-    #  PCA 图
-    # ==========================================================
+    # PCA 图
     p2 = PCA(n_components=2)
     zs = p2.fit_transform(feat_s)
     zt = p2.transform(feat_t)
 
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
-                s=25, c=y_s, marker='o',
-                cmap=cmap, vmin=0, vmax=9,
-                alpha=0.45, edgecolors='none', label="Source")
+                s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
+                alpha=0.45, marker='o', label="Source", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
-                s=30, c=y_t, marker='^',
-                cmap=cmap, vmin=0, vmax=9,
-                alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
-
-    handles = domain_handles + class_handles
-    plt.legend(handles=handles, frameon=True, ncol=5, fontsize=9,
-               loc='best', title="Domains & Classes")
-
+                s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
+                alpha=0.9, marker='^', label="Target", edgecolors='black', linewidths=0.3)
+    plt.legend(domain_handles + class_handles, frameon=True, ncol=5,
+               fontsize=9, loc='best', title="Domains & Classes")
     plt.title(f"{title_prefix} | PCA", fontsize=12, pad=8)
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_pca.png"), dpi=240)
     plt.close()
 
 
-
-def plot_class_center_heatmap(feat_s: np.ndarray, y_s: np.ndarray,
-                              feat_t: np.ndarray, y_t: np.ndarray,
-                              num_classes: int, save_path: str,
-                              title: str = "Center Dist (1-cos)"):
-    """
-    计算源/目标每类中心（L2 归一化后求均值），
-    以 1 - 余弦相似度 作为距离，绘制 CxC 热力图。
-    返回：同类对角线距离的平均值（越小越对齐）
-    """
+def plot_class_center_heatmap(feat_s, y_s, feat_t, y_t, num_classes, save_path, title="Center Dist (1-cos)"):
+    """绘制源/目标类中心余弦距离热力图"""
     def class_centers(feat, y, C):
         f = feat / (np.linalg.norm(feat, axis=1, keepdims=True) + 1e-12)
         centers = np.zeros((C, f.shape[1]), dtype=np.float32)
@@ -205,11 +178,9 @@ def plot_class_center_heatmap(feat_s: np.ndarray, y_s: np.ndarray,
     Cs = class_centers(feat_s, y_s, num_classes)
     Ct = class_centers(feat_t, y_t, num_classes)
 
-    Sim = Cs @ Ct.T                          # 余弦相似度（中心向量已单位化）
-    D = 1.0 - np.clip(Sim, -1, 1)            # 距离矩阵
-
+    D = 1.0 - np.clip(Cs @ Ct.T, -1, 1)
     plt.figure(figsize=(6, 5))
-    plt.imshow(D, interpolation='nearest', aspect='auto')
+    plt.imshow(D, interpolation='nearest', aspect='auto', cmap="YlGnBu")
     plt.colorbar()
     plt.xlabel("Target class")
     plt.ylabel("Source class")
@@ -224,98 +195,30 @@ def plot_class_center_heatmap(feat_s: np.ndarray, y_s: np.ndarray,
     diag = float(np.mean([D[i, i] for i in range(num_classes)]))
     return diag
 
-def stratified_subsample(feat, y, w=None, max_points=2000, min_per_class=10):
-    """
-    分层采样（每类保留相近数量的样本，防止稀有类消失）
-    ----------
-    feat : np.ndarray
-        特征矩阵 [N, D]
-    y : np.ndarray
-        标签数组 [N]
-    w : np.ndarray | None
-        可选的样本权重（如置信度），将同步采样
-    max_points : int
-        总采样点上限（默认 2000）
-    min_per_class : int
-        每类最少保留样本数
-    ----------
-    返回:
-        feat_sub, y_sub, w_sub
-    """
-    uniq, counts = np.unique(y, return_counts=True)
-    n_classes = len(uniq)
 
-    # 每类目标样本数
-    samples_per_class = max(max_points // n_classes, min_per_class)
-
-    idx_list = []
-    for c in uniq:
-        idx_c = np.where(y == c)[0]
-        if len(idx_c) == 0:
-            continue
-
-        n_c = min(samples_per_class, len(idx_c))
-        idx_sel = np.random.choice(idx_c, n_c, replace=False)
-        idx_list.append(idx_sel)
-
-    if len(idx_list) == 0:
-        return feat, y, w
-
-    idx_all = np.concatenate(idx_list)
-
-    # 打乱顺序，使不同类混合
-    np.random.shuffle(idx_all)
-
-    feat_sub = feat[idx_all]
-    y_sub = y[idx_all]
-    w_sub = w[idx_all] if w is not None else None
-    return feat_sub, y_sub, w_sub
 def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
                     device, num_classes: int, out_dir: str, epoch_tag: str,
-                    pred_T: float = 1.0, use_vivid: bool = False,
-                    conf_filter_quantile: float | None = None):
-    """
-    一次性生成：
-      - t-SNE 图  ( *_tsne.png )
-      - PCA  图   ( *_pca.png )
-      - 类中心距离热力图 ( *_center_heatmap.png )
-    返回：
-      dict: { 'center_diag': float, 'js2d': float }
-    参数：
-      conf_filter_quantile: 可选，对目标域样本按 margin 过滤低置信（如 0.3 -> 丢弃最低 30%）
-    """
+                    pred_T: float = 1.0, conf_filter_quantile: float | None = None):
+    """生成 t-SNE / PCA / 类中心热图 并返回统计指标"""
     ensure_dir(out_dir)
-
-    # 收集特征
     feat_s, y_s, _  = collect_feats(src_model, src_loader, device, get_label=True,  pred_T=pred_T)
     feat_t, y_t, w  = collect_feats(tgt_model, tgt_loader, device, get_label=False, pred_T=pred_T)
 
-    # 可选：按置信度过滤目标域低置信样本，减少伪标签噪声
     if conf_filter_quantile is not None:
         q = np.quantile(w, conf_filter_quantile)
         keep = (w >= q)
         feat_t, y_t, w = feat_t[keep], y_t[keep], w[keep]
-    feat_s, y_s, _ = stratified_subsample(feat_s, y_s, max_points=2000)
-    feat_t, y_t, w = stratified_subsample(feat_t, y_t, w, max_points=2000)
 
-    # 可视化：t-SNE & PCA
-    plot_tsne_pca(
-        feat_s, y_s, feat_t, y_t,
-        os.path.join(out_dir, f"{epoch_tag}_vis.png"),
-        title_prefix=epoch_tag, use_vivid=use_vivid
-    )
+    plot_tsne_pca(feat_s, y_s, feat_t, y_t,
+                  os.path.join(out_dir, f"{epoch_tag}_vis.png"),
+                  title_prefix=epoch_tag)
 
-    # 类中心距离热力图
     diag = plot_class_center_heatmap(
         feat_s, y_s, feat_t, y_t, num_classes,
         os.path.join(out_dir, f"{epoch_tag}_center_heatmap.png"),
         title=f"{epoch_tag} | Center Dist (1-cos)"
     )
 
-    # 分布相似度（统一到同一 PCA 2D 空间，再算 JS）
     p2 = PCA(n_components=2)
-    as2 = p2.fit_transform(feat_s)
-    at2 = p2.transform(feat_t)
-    js = js_divergence_2d(as2, at2, bins=80)
-
+    js = js_divergence_2d(p2.fit_transform(feat_s), p2.transform(feat_t), bins=80)
     return {"center_diag": float(diag), "js2d": float(js)}
