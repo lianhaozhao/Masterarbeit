@@ -136,7 +136,8 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
         plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
                    label='Target ', markersize=8, alpha=0.9)
     ]
-    plt.legend(domain_handles + class_handles, frameon=True, ncol=5,
+
+    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
                fontsize=9, loc='best', title="Domains & Classes")
 
     plt.title(f"{title_prefix} | t-SNE", fontsize=12, pad=8)
@@ -156,8 +157,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.9, marker='^', label="Target", edgecolors='black', linewidths=0.3)
-    plt.legend(domain_handles + class_handles, frameon=True, ncol=5,
+    # ✅ 同样修复 legend
+    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
                fontsize=9, loc='best', title="Domains & Classes")
+
     plt.title(f"{title_prefix} | PCA", fontsize=12, pad=8)
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_pca.png"), dpi=240)
