@@ -17,16 +17,16 @@ CLASS_NAMES = [f"R{5*i+5:02d}" for i in range(10)]  # ['R05','R10',...,'R50']
 def corporate_palette_10():
     """增强区分度的品牌配色 (10 类)"""
     base_rgb = [
-        (0, 64, 112),     # 深蓝
-        (0, 105, 170),    # 亮蓝（增强对比）
-        (0, 159, 227),    # 天蓝
-        (0, 180, 140),    # 青绿
+        (0, 47, 167),  # 深蓝（更纯、更深）
+        (0, 124, 255),  # 亮蓝（
+        (0, 200, 255),  # 天蓝
+        (0, 180, 140),  # 青绿
         (126, 195, 153),  # 浅绿
-        (201, 212, 0),    # 黄绿
-        (253, 202, 0),    # 明黄
-        (236, 97, 159),   # 洋红
-        (255, 128, 64),   # 橙色
-        (160, 90, 190),   # 紫色
+        (201, 212, 0),  # 黄绿
+        (253, 202, 0),  # 明黄
+        (236, 97, 159),  # 洋红
+        (255, 128, 64),  # 橙色
+        (160, 90, 190),  # 紫色
     ]
     colors = [(r/255, g/255, b/255) for r, g, b in base_rgb]
     return ListedColormap(colors)
@@ -118,10 +118,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.45, marker='o', label="Source", edgecolors='none')
+                marker='o', label="Source", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
+                marker='^', label="Target", edgecolors='black', linewidths=0.3)
 
     # 图例
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
@@ -153,11 +153,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.45, marker='o', label="Source", edgecolors='none')
+                marker='o', label="Source", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.9, marker='^', label="Target", edgecolors='black', linewidths=0.3)
-    # ✅ 同样修复 legend
+                marker='^', label="Target", edgecolors='black', linewidths=0.3)
     plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
                fontsize=9, loc='best', title="Domains & Classes")
 
