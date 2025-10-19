@@ -24,9 +24,7 @@ VIVID10 = ListedColormap([
 ])
 
 
-# =========================
 # 基础工具
-# =========================
 def ensure_dir(p: str) -> str:
     os.makedirs(p, exist_ok=True)
     return p
@@ -98,9 +96,7 @@ def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
     return 0.5 * (KL_PM + KL_QM)
 
 
-# =========================
 # 可视化
-# =========================
 def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
                   feat_t: np.ndarray, y_t: np.ndarray,
                   save_path: str, title_prefix: str = "epoch",
@@ -129,12 +125,12 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
     plt.figure(figsize=(9, 7))
     # Source 域（颜色更淡）
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
-                s=30, c=y_s, marker='o',
+                s=25, c=y_s, marker='o',
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.45, edgecolors='none', label="Source")
     # Target 域（颜色饱和）
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
-                s=35, c=y_t, marker='^',
+                s=30, c=y_t, marker='^',
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.8, edgecolors='black', linewidths=0.3, label="Target")
 
@@ -169,11 +165,11 @@ def plot_tsne_pca(feat_s: np.ndarray, y_s: np.ndarray,
 
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
-                s=35, c=y_s, marker='o',
+                s=25, c=y_s, marker='o',
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.45, edgecolors='none', label="Source")
     plt.scatter(zt[:, 0], zt[:, 1],
-                s=55, c=y_t, marker='^',
+                s=30, c=y_t, marker='^',
                 cmap=cmap, vmin=0, vmax=9,
                 alpha=0.9, edgecolors='black', linewidths=0.3, label="Target")
 
@@ -228,7 +224,52 @@ def plot_class_center_heatmap(feat_s: np.ndarray, y_s: np.ndarray,
     diag = float(np.mean([D[i, i] for i in range(num_classes)]))
     return diag
 
+def stratified_subsample(feat, y, w=None, max_points=2000, min_per_class=10):
+    """
+    分层采样（每类保留相近数量的样本，防止稀有类消失）
+    ----------
+    feat : np.ndarray
+        特征矩阵 [N, D]
+    y : np.ndarray
+        标签数组 [N]
+    w : np.ndarray | None
+        可选的样本权重（如置信度），将同步采样
+    max_points : int
+        总采样点上限（默认 2000）
+    min_per_class : int
+        每类最少保留样本数
+    ----------
+    返回:
+        feat_sub, y_sub, w_sub
+    """
+    uniq, counts = np.unique(y, return_counts=True)
+    n_classes = len(uniq)
 
+    # 每类目标样本数
+    samples_per_class = max(max_points // n_classes, min_per_class)
+
+    idx_list = []
+    for c in uniq:
+        idx_c = np.where(y == c)[0]
+        if len(idx_c) == 0:
+            continue
+
+        n_c = min(samples_per_class, len(idx_c))
+        idx_sel = np.random.choice(idx_c, n_c, replace=False)
+        idx_list.append(idx_sel)
+
+    if len(idx_list) == 0:
+        return feat, y, w
+
+    idx_all = np.concatenate(idx_list)
+
+    # 打乱顺序，使不同类混合
+    np.random.shuffle(idx_all)
+
+    feat_sub = feat[idx_all]
+    y_sub = y[idx_all]
+    w_sub = w[idx_all] if w is not None else None
+    return feat_sub, y_sub, w_sub
 def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
                     device, num_classes: int, out_dir: str, epoch_tag: str,
                     pred_T: float = 1.0, use_vivid: bool = False,
@@ -254,6 +295,8 @@ def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
         q = np.quantile(w, conf_filter_quantile)
         keep = (w >= q)
         feat_t, y_t, w = feat_t[keep], y_t[keep], w[keep]
+    feat_s, y_s, _ = stratified_subsample(feat_s, y_s, max_points=2000)
+    feat_t, y_t, w = stratified_subsample(feat_t, y_t, w, max_points=2000)
 
     # 可视化：t-SNE & PCA
     plot_tsne_pca(
