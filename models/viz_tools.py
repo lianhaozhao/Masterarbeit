@@ -6,6 +6,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 import torch
 import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 
 # =========================
@@ -100,10 +101,15 @@ def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
 # 可视化函数
 # =========================
 def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
-    """绘制 t-SNE 和 PCA 可视化图"""
+    """绘制 t-SNE 和 PCA 可视化图（标准化版，无平衡采样）"""
+    # 标准化特征，防止高方差维度主导
+    scaler = StandardScaler()
+    feat_s = scaler.fit_transform(feat_s)
+    feat_t = scaler.transform(feat_t)
+
     cmap = corporate_palette_10()
 
-    # PCA 降维后再做 t-SNE
+    # PCA → t-SNE
     pca50 = PCA(n_components=min(50, feat_s.shape[1]))
     z_s = pca50.fit_transform(feat_s)
     z_t = pca50.transform(feat_t)
@@ -114,16 +120,15 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     ns = z_s.shape[0]
     z_s2, z_t2 = z[:ns], z[ns:]
 
-    # t-SNE 图
+    # ---------- t-SNE 图 ----------
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.45, marker='o', label="Source", edgecolors='none')
+                alpha=0.55, marker='o', label="Source", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
 
-    # 图例
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
     class_handles = [
         plt.Line2D([0], [0], marker='s', linestyle='None',
@@ -139,13 +144,12 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
 
     plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
                fontsize=9, loc='best', title="Domains & Classes")
-
     plt.title(f"{title_prefix} | t-SNE", fontsize=12, pad=8)
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_tsne.png"), dpi=240)
     plt.close()
 
-    # PCA 图
+    # ---------- PCA 图 ----------
     p2 = PCA(n_components=2)
     zs = p2.fit_transform(feat_s)
     zt = p2.transform(feat_t)
@@ -153,18 +157,19 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.45, marker='o', label="Source", edgecolors='none')
+                alpha=0.55, marker='o', label="Source", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.9, marker='^', label="Target", edgecolors='black', linewidths=0.3)
-    # ✅ 同样修复 legend
+                alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
+
     plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
                fontsize=9, loc='best', title="Domains & Classes")
-
     plt.title(f"{title_prefix} | PCA", fontsize=12, pad=8)
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_pca.png"), dpi=240)
     plt.close()
+
+
 
 
 def plot_class_center_heatmap(feat_s, y_s, feat_t, y_t, num_classes, save_path, title="Center Dist (1-cos)"):
