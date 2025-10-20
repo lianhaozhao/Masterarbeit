@@ -124,7 +124,7 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.55, marker='o', label="Source", edgecolors='none')
+                alpha=0.65, marker='o', label="Source", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
@@ -157,7 +157,7 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.55, marker='o', label="Source", edgecolors='none')
+                alpha=0.65, marker='o', label="Source", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
