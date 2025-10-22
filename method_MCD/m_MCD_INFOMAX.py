@@ -13,26 +13,10 @@ from models.MMD import infomax_loss_from_logits
 
 
 # MCD 的分歧度量
-def entropy(p, eps=1e-8):
-    p = p.clamp(min=eps)
-    return -(p * p.log()).sum()
-
-def mutual_information(p1, p2, eps=1e-8):
-    """
-    估计 C1/C2 输出的互信息 I(Y1;Y2)  Mutual Information Minimization
-    p1, p2: [B, C] softmax 概率
-    """
-    B, C = p1.size()
-    p1_mean = p1.mean(0)          # [C]
-    p2_mean = p2.mean(0)          # [C]
-    joint = torch.einsum('bi,bj->ij', p1, p2) / B  # [C, C]
-
-    H1 = entropy(p1_mean)
-    H2 = entropy(p2_mean)
-    H12 = entropy(joint.view(-1))
-
-    return H1 + H2 - H12   # I(Y1;Y2)
-
+def discrepancy(logits1, logits2, reduction='mean'):
+    p1, p2 = F.softmax(logits1, dim=1), F.softmax(logits2, dim=1)
+    d = (p1 - p2).abs().sum(1)
+    return d.mean() if reduction == 'mean' else d.sum() if reduction == 'sum' else d
 
 #  评估（给出 C1/C2/Ensemble）
 @torch.no_grad()
@@ -60,22 +44,25 @@ def MCD_evaluate(model, loader, device):
 def train_mcd(model, src_loader, tgt_loader, device,
               num_epochs=50, lr_g=2e-4, lr_c=2e-4, weight_decay=0.0,
               lambda_dis=1.0, nB=4, nC=4,
+              save_dir="/content/drive/MyDrive/MCD/",
+              tag="T000_RUN0"
               ):
 
     model.to(device)
     model.train()
+    os.makedirs(save_dir, exist_ok=True)
 
     # 优化器：GC / 仅C / 仅G
-    optim_GC = torch.optim.Adam(
+    optim_GC = torch.optim.AdamW(
         list(model.feature_extractor.parameters()) + list(model.feature_reducer.parameters()) +
         list(model.c1.parameters()) + list(model.c2.parameters()),
         lr=lr_g, weight_decay=weight_decay
     )
-    optim_C  = torch.optim.Adam(
+    optim_C  = torch.optim.AdamW(
         list(model.c1.parameters()) + list(model.c2.parameters()),
         lr=lr_c, weight_decay=weight_decay
     )
-    optim_G  = torch.optim.Adam(
+    optim_G  = torch.optim.AdamW(
         list(model.feature_extractor.parameters()) + list(model.feature_reducer.parameters()),
         lr=lr_g, weight_decay=weight_decay
     )
@@ -83,13 +70,15 @@ def train_mcd(model, src_loader, tgt_loader, device,
     global_step = 0
 
     best_state = None
+    best_score = float("inf")
 
     for epoch in range(1, num_epochs+1):
         iters = max(len(src_loader), len(tgt_loader))
         it_src, it_tgt = iter(src_loader), iter(tgt_loader)
 
         sumA = sumB = sumC = 0.0
-        countA = countB = countC = 0
+        countA = countB = countC = im  = 0
+
         for it in range(iters):
             try: xs, ys = next(it_src)
             except StopIteration: it_src = iter(src_loader); xs, ys = next(it_src)
@@ -101,12 +90,14 @@ def train_mcd(model, src_loader, tgt_loader, device,
             # ---- Step A: 源域监督 (更新 G, C1, C2) ----
             model.feature_extractor.train();model.feature_reducer.train();model.c1.train(); model.c2.train()
             optim_GC.zero_grad()
-            l1s, l2s, _ = model(xs)
-            loss_src = F.cross_entropy(l1s, ys) + F.cross_entropy(l2s, ys)
-            lossA = loss_src
-            lossA.backward(); optim_GC.step()
-            sumA += lossA.item()
-            countA +=1
+            for _ in range(2):
+              l1s, l2s, _ = model(xs)
+              loss_src = F.cross_entropy(l1s, ys) + F.cross_entropy(l2s, ys)
+              lossA = loss_src
+              lossA.backward(); optim_GC.step()
+              sumA += lossA.item()
+              countA +=1
+
 
             # ---- Step B: 固定 G，最大化目标域分歧（更新 C1/C2）----
             model.feature_extractor.eval()
@@ -121,17 +112,13 @@ def train_mcd(model, src_loader, tgt_loader, device,
             model.c2.train()
             for _ in range(nB):
                 optim_C.zero_grad()
-                l1t = model.c1(ft);
-                l2t = model.c2(ft)
-                p1, p2 = F.softmax(l1t, dim=1), F.softmax(l2t, dim=1)
-                mi = mutual_information(p1, p2)
+                l1t = model.c1(ft); l2t = model.c2(ft)
+                disc_t = discrepancy(l1t, l2t, 'mean')
 
-                # 同时维持源域能力
+                # 同时维持源域能力，避免崩坏（源域 CE）
                 ls1_b, ls2_b = model.c1(fs_b), model.c2(fs_b)
                 loss_src_b = F.cross_entropy(ls1_b, ys) + F.cross_entropy(ls2_b, ys)
-
-                # 目标：保持源域性能，同时最大化 C1/C2 在目标域的分歧 (最小化互信息)
-                lossB = loss_src_b - lambda_dis * mi
+                lossB = loss_src_b * 0.5 - lambda_dis * disc_t   # 最小化该式 => 最大化分歧
                 lossB.backward(); optim_C.step()
                 sumB += lossB.item()
             countB += nB
@@ -149,19 +136,13 @@ def train_mcd(model, src_loader, tgt_loader, device,
                 optim_G.zero_grad()
                 ft_c = model.feature_extractor(xt)
                 lt1_c, lt2_c = model.c1(ft_c), model.c2(ft_c)
-                p1_c, p2_c = F.softmax(lt1_c, dim=1), F.softmax(lt2_c, dim=1)
-
-                mi_c = mutual_information(p1_c, p2_c)
-
-                # InfoMax 正则（让预测更 confident 但不塌缩）
-                loss_im_1, _, _ = infomax_loss_from_logits(lt1_c, T=1, marg_weight=1)
-                loss_im_2, _, _ = infomax_loss_from_logits(lt2_c, T=1, marg_weight=1)
-                loss_im = 0.5 * loss_im_1 + 0.5 * loss_im_2
-
-                # 最小化互信息 + InfoMax
-                lossC = lambda_dis * mi_c + loss_im
-                lossC.backward()
-                optim_G.step()
+                loss_im_1, h_cond_1, h_marg_1 = infomax_loss_from_logits(lt1_c, T=1, marg_weight=1)
+                loss_im_2, h_cond_2, h_marg_2 = infomax_loss_from_logits(lt2_c, T=1, marg_weight=1)
+                im += ((h_cond_1-h_marg_1)+(h_cond_2-h_marg_2))/2
+                loss_im = 0.5 *(loss_im_1 + loss_im_2)
+                disc_c = discrepancy(lt1_c, lt2_c, 'mean')
+                lossC = lambda_dis * disc_c + loss_im
+                lossC.backward(); optim_G.step()
                 sumC += lossC.item()
             countC += nC
             for p in model.c1.parameters(): p.requires_grad_(True)
@@ -171,60 +152,76 @@ def train_mcd(model, src_loader, tgt_loader, device,
         avg_lossA = sumA / max(1, countA)
         avg_lossB = sumB / max(1, countB)
         avg_lossC = sumC / max(1, countC)
+        im_avg = im / max(1, countC)
         print(f"[Epoch {epoch:02d}] "
-              f"lossA:{avg_lossA:.4f} lossB(last):{avg_lossB:.4f} lossC(last):{avg_lossC:.4f}")
+              f"lossA:{avg_lossA:.4f} lossB(last):{avg_lossB:.4f} lossC(last):{avg_lossC:.4f}"  f"im_avg:{im_avg:.4f}")
+        if epoch > 10 and im_avg < best_score:
+            best_score = im_avg
+            best_state = copy.deepcopy(model.state_dict())
+        if epoch == 1:
+            torch.save(model.state_dict(), os.path.join(save_dir, f"{tag}_epoch1.pth"))
+            print(f"[SAVE] First epoch model saved: {tag}_epoch1.pth")
 
 
-        print("[INFO] Evaluating on target test set...")
-        test_ds = PKLDataset(tgt_test)
-        test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-
-        ACC_A, ACC_B, ACC_AVG = MCD_evaluate(model, test_loader, device)
-        print(f"ACC_A: {ACC_A:.04f}, ACC_B: {ACC_B:.04f}, ACC_AVG: {ACC_AVG:.04f}")
 
 
-    # if best_state is not None:
-    #     model.load_state_dict(best_state)
+
+    if best_state is not None:
+        model.load_state_dict(best_state)
+    final_path = os.path.join(save_dir, f"{tag}_final.pth")
+    torch.save(model.state_dict(), final_path)
+    print(f"[SAVE] Final/best model saved: {final_path}")
 
     return model
 
 # ====== 入口 ======
 if __name__ == "__main__":
-    with open("../configs/default.yaml", 'r') as f:
-        cfg = yaml.safe_load(f)['baseline']
-    bs = cfg['batch_size']; lr = cfg['learning_rate']; wd = cfg['weight_decay']
+    with open("/content/github/configs/default.yaml", 'r') as f:
+        cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
+    bs = 64
+    lr = 0.00020341011651115088
+    wd = 2.5586723582760202e-05
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
-    num_epochs = 10
+    num_epochs = 15
 
-    # 数据路径
-    src_path = "../datasets/source/train/DC_T197_RP.txt"
-    tgt_path = "../datasets/target/train/HC_T185_RP.txt"
-    tgt_test = "../datasets/target/test/HC_T185_RP.txt"
+    files = [185, 188, 191, 194, 197]
+    for file in files:
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        src_path = '/content/datasets/source/train/DC_T197_RP.txt'
+        tgt_path = '/content/datasets/target/train/HC_T{}_RP.txt'.format(file)
+        tgt_test = '/content/datasets/target/test/HC_T{}_RP.txt'.format(file)
 
-    # 构建数据
-    src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
+        print(f"[INFO] Loading HC_T{file} ...")
 
-    val_loader = DataLoader(PKLDataset(tgt_test), batch_size=bs, shuffle=False)
+        for run_id in range(5):
+            print(f"\n========== RUN {run_id} ==========")
 
-    # 构建模型
-    model = Flexible_MCD(
-        num_layers=num_layers, start_channels=sc, kernel_size=ksz, cnn_act='leakrelu',
-        num_classes=10
-    )
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 训练（MCD）
-    model = train_mcd(
-        model, src_loader, tgt_loader, device,
-        num_epochs=20, lr_g=lr, lr_c=lr, weight_decay=wd,
-        lambda_dis=1.0, nB=1, nC=2
-    )
+            # 构建数据
+            src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
 
-    print("[INFO] Evaluating on target test set...")
-    test_ds = PKLDataset(tgt_test)
-    test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
+            val_loader = DataLoader(PKLDataset(tgt_test), batch_size=bs, shuffle=False)
 
-    ACC_A, ACC_B, ACC_AVG= MCD_evaluate(model, test_loader, device)
-    print(f"ACC_A: {ACC_A:.04f}, ACC_B: {ACC_B:.04f}, ACC_AVG: {ACC_AVG:.04f}")
+            # 构建模型
+            model = Flexible_MCD(
+                num_layers=num_layers, start_channels=sc, kernel_size=ksz, cnn_act='leakrelu',
+                num_classes=10
+            )
+
+            # 训练（MCD）
+            model = train_mcd(
+                model, src_loader, tgt_loader, device,
+                num_epochs=num_epochs, lr_g=lr*1, lr_c=lr, weight_decay=wd,
+                lambda_dis=1.0, nB=1, nC=2,
+                save_dir="/content/drive/MyDrive/Masterarbeit/MCD_INFOMAX/T{file}",
+                tag=f"RUN{run_id}"
+            )
+
+            print("[INFO] Evaluating on target test set...")
+            test_ds = PKLDataset(tgt_test)
+            test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
+
+            ACC_A, ACC_B, ACC_AVG= MCD_evaluate(model, test_loader, device)
+            print(f"ACC_A: {ACC_A:.04f}, ACC_B: {ACC_B:.04f}, ACC_AVG: {ACC_AVG:.04f}")
 
