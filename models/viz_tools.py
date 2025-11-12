@@ -8,14 +8,22 @@ import torch
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 import matplotlib as mpl
-mpl.rcParams['pdf.fonttype'] = 42
-mpl.rcParams['ps.fonttype']  = 42
-
+mpl.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Arial", "DejaVu Sans"],  # 自选
+    "font.weight": "bold",        # 全局加粗
+    "axes.labelweight": "bold",   # 坐标轴标题加粗
+    "axes.titleweight": "bold",   # 图标题加粗
+    "legend.title_fontsize": 10,  # 仅字号；粗细由下方 legend 设置或全局控制
+    # PDF/PS 字体嵌入（论文友好）
+    "pdf.fonttype": 42,
+    "ps.fonttype": 42,
+})
 
 # =========================
 # 配置：类别名称与配色
 # =========================
-CLASS_NAMES = [rf"$r_{{{v/100:.2f}}}$" for v in range(5, 51, 5)] # ['R05','R10',...,'R50']
+CLASS_NAMES = [rf"$\mathbf{{r}}_{{{v:02d}}}$" for v in range(5, 51, 5)]
 
 
 def corporate_palette_10():
