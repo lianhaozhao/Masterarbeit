@@ -7,12 +7,15 @@ from sklearn.manifold import TSNE
 import torch
 import numpy as np
 from sklearn.preprocessing import StandardScaler
+import matplotlib as mpl
+mpl.rcParams['pdf.fonttype'] = 42
+mpl.rcParams['ps.fonttype']  = 42
 
 
 # =========================
 # 配置：类别名称与配色
 # =========================
-CLASS_NAMES = [f"R{5*i+5:02d}" for i in range(10)]  # ['R05','R10',...,'R50']
+CLASS_NAMES = [rf"$r_{{{v/100:.2f}}}$" for v in range(5, 51, 5)] # ['R05','R10',...,'R50']
 
 
 def corporate_palette_10():
@@ -124,10 +127,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='o', label="Source", edgecolors='none')
+                alpha=0.65, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
+                alpha=0.85, marker='^', label="Ziel", edgecolors='black', linewidths=0.3)
 
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
     class_handles = [
@@ -137,16 +140,16 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     ]
     domain_handles = [
         plt.Line2D([0], [0], marker='o', color='gray', linestyle='None',
-                   label='Source ', markersize=7, alpha=0.5),
+                   label='Quelle ', markersize=7, alpha=0.5),
         plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
-                   label='Target ', markersize=8, alpha=0.9)
+                   label='Ziel ', markersize=8, alpha=0.9)
     ]
 
-    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
-               fontsize=9, loc='best', title="Domains & Classes")
-    plt.title(f"{title_prefix} | t-SNE", fontsize=12, pad=8)
+    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
+               fontsize=9, loc='best', title="Domänen & Klassen")
     plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_tsne.png"), dpi=240)
+    plt.savefig(save_path.replace(".png", "_tsne.pdf"),
+                bbox_inches="tight", pad_inches=0.02)
     plt.close()
 
     # ---------- PCA 图 ----------
@@ -157,16 +160,16 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='o', label="Source", edgecolors='none')
+                alpha=0.65, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Target", edgecolors='black', linewidths=0.3)
+                alpha=0.85, marker='^', label="Ziel", edgecolors='black', linewidths=0.3)
 
-    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=5,
-               fontsize=9, loc='best', title="Domains & Classes")
-    plt.title(f"{title_prefix} | PCA", fontsize=12, pad=8)
+    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
+               fontsize=9, loc='best', title="Domänen & Klassen")
     plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_pca.png"), dpi=240)
+    plt.savefig(save_path.replace(".png", "_pca.pdf"),
+                bbox_inches="tight", pad_inches=0.02)
     plt.close()
 
 
@@ -190,8 +193,8 @@ def plot_class_center_heatmap(feat_s, y_s, feat_t, y_t, num_classes, save_path, 
     plt.figure(figsize=(6, 5))
     plt.imshow(D, interpolation='nearest', aspect='auto', cmap="YlGnBu")
     plt.colorbar()
-    plt.xlabel("Target class")
-    plt.ylabel("Source class")
+    plt.xlabel("Zielklasse")
+    plt.ylabel("Quellklasse")
     ticks = np.arange(num_classes)
     plt.xticks(ticks, CLASS_NAMES[:num_classes], rotation=45, ha='right')
     plt.yticks(ticks, CLASS_NAMES[:num_classes])
