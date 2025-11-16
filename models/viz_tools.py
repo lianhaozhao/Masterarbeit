@@ -119,45 +119,97 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     feat_t = scaler.transform(feat_t)
 
     cmap = corporate_palette_10()
+    norm = mpl.colors.Normalize(vmin=0, vmax=9)  # 0..9 → colormap
 
     # PCA → t-SNE
     pca50 = PCA(n_components=min(50, feat_s.shape[1]))
     z_s = pca50.fit_transform(feat_s)
     z_t = pca50.transform(feat_t)
 
-    tsne = TSNE(n_components=2, init="pca", learning_rate="auto",
-                perplexity=30, max_iter=1000)
+    tsne = TSNE(
+        n_components=2,
+        init="pca",
+        learning_rate="auto",
+        perplexity=30,
+        max_iter=1000,
+    )
     z = tsne.fit_transform(np.vstack([z_s, z_t]))
     ns = z_s.shape[0]
     z_s2, z_t2 = z[:ns], z[ns:]
 
+    # 预先算好每个点对应的颜色（用于边框）
+    edge_s = cmap(norm(y_s))  # shape = (N_s, 4)
+    edge_t = cmap(norm(y_t))  # shape = (N_t, 4)
+
     # ---------- t-SNE 图 ----------
     plt.figure(figsize=(9, 7))
-    plt.scatter(z_s2[:, 0], z_s2[:, 1],
-                s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='o', label="Quelle", edgecolors='none')
-    plt.scatter(z_t2[:, 0], z_t2[:, 1],
-                s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Ziel", edgecolors='black', linewidths=0.3)
+    # Quelle：空心圆，边框为类颜色
+    plt.scatter(
+        z_s2[:, 0], z_s2[:, 1],
+        s=25,
+        facecolors='none',       # 无填充
+        edgecolors=edge_s,       # 边框 = colormap 映射结果
+        alpha=0.85,
+        marker='o',
+        label="Quelle",
+        linewidths=0.7,
+    )
+    # Ziel：空心三角形，边框为类颜色
+    plt.scatter(
+        z_t2[:, 0], z_t2[:, 1],
+        s=30,
+        facecolors='none',
+        edgecolors=edge_t,
+        alpha=0.95,
+        marker='^',
+        label="Ziel",
+        linewidths=0.9,
+    )
+
+    plt.xticks([])
+    plt.yticks([])
 
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
     class_handles = [
-        plt.Line2D([0], [0], marker='s', linestyle='None',
-                   color=cmap(i), label=CLASS_NAMES[i], markersize=8)
+        plt.Line2D(
+            [0], [0],
+            marker='s',
+            linestyle='None',
+            color=cmap(i),
+            label=CLASS_NAMES[i],
+            markersize=8,
+        )
         for i in present
     ]
     domain_handles = [
-        plt.Line2D([0], [0], marker='o', color='gray', linestyle='None',
-                   label='Quelle ', markersize=7, alpha=0.5),
-        plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
-                   label='Ziel ', markersize=8, alpha=0.9)
+        plt.Line2D(
+            [0], [0],
+            marker='o',
+            color='gray',
+            linestyle='None',
+            label='Quelle ',
+            markersize=7,
+            alpha=0.5,
+        ),
+        plt.Line2D(
+            [0], [0],
+            marker='^',
+            color='gray',
+            linestyle='None',
+            label='Ziel ',
+            markersize=8,
+            alpha=0.9,
+        )
     ]
 
-    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
-               fontsize=9, loc='best', title="Domänen & Klassen")
+    # plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
+    #            fontsize=9, loc='best', title="Domänen & Klassen")
     plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_tsne.pdf"),
-                bbox_inches="tight", pad_inches=0.02)
+    plt.savefig(
+        save_path.replace(".png", "_tsne.pdf"),
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
     plt.close()
 
     # ---------- PCA 图 ----------
@@ -165,20 +217,48 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     zs = p2.fit_transform(feat_s)
     zt = p2.transform(feat_t)
 
-    plt.figure(figsize=(9, 7))
-    plt.scatter(zs[:, 0], zs[:, 1],
-                s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='o', label="Quelle", edgecolors='none')
-    plt.scatter(zt[:, 0], zt[:, 1],
-                s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Ziel", edgecolors='black', linewidths=0.3)
+    # 重新算一遍边框颜色（zs/zt 和 z_s2/z_t2 顺序相同的话其实可以复用）
+    edge_s2 = cmap(norm(y_s))
+    edge_t2 = cmap(norm(y_t))
 
-    plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
-               fontsize=9, loc='best', title="Domänen & Klassen")
+    plt.figure(figsize=(9, 7))
+    # Quelle：空心圆
+    plt.scatter(
+        zs[:, 0], zs[:, 1],
+        s=25,
+        facecolors='none',
+        edgecolors=edge_s2,
+        alpha=0.85,
+        marker='o',
+        label="Quelle",
+        linewidths=0.7,
+    )
+    # Ziel：空心三角形
+    plt.scatter(
+        zt[:, 0], zt[:, 1],
+        s=30,
+        facecolors='none',
+        edgecolors=edge_t2,
+        alpha=0.95,
+        marker='^',
+        label="Ziel",
+        linewidths=0.9,
+    )
+
+    plt.xticks([])
+    plt.yticks([])
+
+    # plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
+    #            fontsize=9, loc='best', title="Domänen & Klassen")
     plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_pca.pdf"),
-                bbox_inches="tight", pad_inches=0.02)
+    plt.savefig(
+        save_path.replace(".png", "_pca.pdf"),
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
     plt.close()
+
+
 
 
 
