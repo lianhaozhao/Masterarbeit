@@ -139,7 +139,7 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Ziel",
-                edgecolors='black', linewidths=0.02)
+                edgecolors='black', linewidths=0.005)
 
     # 去掉坐标轴刻度数值
     ax = plt.gca()
@@ -149,7 +149,7 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
 
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_tsne.pdf"),
-                bbox_inches="tight", pad_inches=0.015)
+                bbox_inches="tight", pad_inches=0.02)
     plt.close()
 
     # ---------- PCA 图 ----------
@@ -164,7 +164,7 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Ziel",
-                edgecolors='black', linewidths=0.015)
+                edgecolors='black', linewidths=0.005)
 
     # 去掉坐标轴刻度数值
     ax = plt.gca()
