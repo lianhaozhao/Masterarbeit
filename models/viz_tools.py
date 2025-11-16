@@ -23,7 +23,7 @@ mpl.rcParams.update({
 # =========================
 # 配置：类别名称与配色
 # =========================
-CLASS_NAMES = [rf"$\mathbf{{r}}_{{{v:02d}}}$" for v in range(5, 51, 5)]
+CLASS_NAMES = [f"$r_{{{v/100:.2f}}}$" for v in range(5, 51, 5)]
 
 
 def corporate_palette_10():
