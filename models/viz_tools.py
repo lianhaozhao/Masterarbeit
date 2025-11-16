@@ -139,9 +139,11 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Ziel", edgecolors='black', linewidths=0.05)
+    ax = plt.gca()
+    ax.tick_params(axis='both', which='both',
+                   labelbottom=False,  # 不显示 x 轴数字
+                   labelleft=False)  # 不显示 y 轴数字
 
-    plt.xticks([])
-    plt.yticks([])
 
 
 
@@ -178,8 +180,12 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.85, marker='^', label="Ziel", edgecolors='black', linewidths=0.05)
 
-    plt.xticks([])
-    plt.yticks([])
+    ax = plt.gca()
+    ax.tick_params(axis='both', which='both',
+                   labelbottom=False,  # 不显示 x 轴数字
+                   labelleft=False)  # 不显示 y 轴数字
+
+
 
     # plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
     #            fontsize=9, loc='best', title="Domänen & Klassen")
