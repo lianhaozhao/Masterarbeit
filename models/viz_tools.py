@@ -113,7 +113,7 @@ def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
 # =========================
 def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     """绘制 t-SNE 和 PCA 可视化图（标准化版，无平衡采样）"""
-    # 标准化特征
+    # 标准化特征，防止高方差维度主导
     scaler = StandardScaler()
     feat_s = scaler.fit_transform(feat_s)
     feat_t = scaler.transform(feat_t)
@@ -138,15 +138,32 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
                 alpha=0.35, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='^', label="Ziel",
-                edgecolors='black', linewidths=0.005)
-
-    # 去掉坐标轴刻度数值
+                alpha=0.65, marker='^', label="Ziel", edgecolors='black', linewidths=0.003)
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
                    labelbottom=False,  # 不显示 x 轴数字
                    labelleft=False)  # 不显示 y 轴数字
 
+    present = np.unique(np.concatenate([y_s, y_t]).astype(int))
+    class_handles = [
+        plt.Line2D([0], [0], marker='s', linestyle='None',
+                   color=cmap(i), label=CLASS_NAMES[i], markersize=8)
+        for i in present
+    ]
+    domain_handles = [
+        plt.Line2D([0], [0], marker='o', color='gray', linestyle='None',
+                   label='Quelle ', markersize=7, alpha=0.5),
+        plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
+                   label='Ziel ', markersize=8, alpha=0.9)
+    ]
+
+    legend = plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
+               fontsize=10, loc='best', title="Domänen & Klassen")
+    legend.get_title().set_fontweight('bold')
+
+    # 图例条目文字加粗
+    for text in legend.get_texts():
+        text.set_fontweight('bold')
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_tsne.pdf"),
                 bbox_inches="tight", pad_inches=0.02)
@@ -162,16 +179,20 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.35, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
-                s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='^', label="Ziel",
-                edgecolors='black', linewidths=0.005)
-
-    # 去掉坐标轴刻度数值
+                s=35, c=y_t, cmap=cmap, vmin=0, vmax=9,
+                alpha=0.65, marker='^', label="Ziel", edgecolors='black', linewidths=0.003)
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
                    labelbottom=False,  # 不显示 x 轴数字
                    labelleft=False)  # 不显示 y 轴数字
 
+    legend = plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
+               fontsize=10, loc='best', title="Domänen & Klassen")
+    legend.get_title().set_fontweight('bold')
+
+    # 图例条目文字加粗
+    for text in legend.get_texts():
+        text.set_fontweight('bold')
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_pca.pdf"),
                 bbox_inches="tight", pad_inches=0.02)
@@ -237,4 +258,4 @@ def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
 
     p2 = PCA(n_components=2)
     js = js_divergence_2d(p2.fit_transform(feat_s), p2.transform(feat_t), bins=80)
-    return {"center_diag": 1, "js2d": float(js)}
+    return {"center_diag": 2, "js2d": float(js)}
