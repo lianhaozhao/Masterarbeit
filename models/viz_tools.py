@@ -135,10 +135,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.55, marker='o', label="Quelle", edgecolors='none')
+                alpha=0.35, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Ziel",
+                alpha=0.65, marker='^', label="Ziel",
                 edgecolors='black', linewidths=0.005)
 
     # 去掉坐标轴刻度数值
@@ -160,10 +160,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.55, marker='o', label="Quelle", edgecolors='none')
+                alpha=0.35, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Ziel",
+                alpha=0.65, marker='^', label="Ziel",
                 edgecolors='black', linewidths=0.005)
 
     # 去掉坐标轴刻度数值
@@ -229,12 +229,12 @@ def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
                   os.path.join(out_dir, f"{epoch_tag}_vis.png"),
                   title_prefix=epoch_tag)
 
-    diag = plot_class_center_heatmap(
-        feat_s, y_s, feat_t, y_t, num_classes,
-        os.path.join(out_dir, f"{epoch_tag}_center_heatmap.png"),
-        title=f"{epoch_tag} | Center Dist (1-cos)"
-    )
+    # diag = plot_class_center_heatmap(
+    #     feat_s, y_s, feat_t, y_t, num_classes,
+    #     os.path.join(out_dir, f"{epoch_tag}_center_heatmap.png"),
+    #     title=f"{epoch_tag} | Center Dist (1-cos)"
+    # )
 
     p2 = PCA(n_components=2)
     js = js_divergence_2d(p2.fit_transform(feat_s), p2.transform(feat_t), bins=80)
-    return {"center_diag": float(diag), "js2d": float(js)}
+    return {"center_diag": 1, "js2d": float(js)}
