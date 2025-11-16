@@ -135,10 +135,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='o', label="Quelle", edgecolors='none')
+                alpha=0.50, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Ziel", edgecolors='face', linewidths=0.05)
+                alpha=0.75, marker='^', label="Ziel", edgecolors='face', linewidths=0.05)
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
                    labelbottom=False,  # 不显示 x 轴数字
@@ -175,10 +175,10 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='o', label="Quelle", edgecolors='none')
+                alpha=0.50, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.85, marker='^', label="Ziel", edgecolors='face', linewidths=0.05)
+                alpha=0.75, marker='^', label="Ziel", edgecolors='face', linewidths=0.05)
 
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
