@@ -113,7 +113,7 @@ def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
 # =========================
 def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     """绘制 t-SNE 和 PCA 可视化图（标准化版，无平衡采样）"""
-    # 标准化特征，防止高方差维度主导
+    # 标准化特征
     scaler = StandardScaler()
     feat_s = scaler.fit_transform(feat_s)
     feat_t = scaler.transform(feat_t)
@@ -135,36 +135,21 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(z_s2[:, 0], z_s2[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.50, marker='o', label="Quelle", edgecolors='none')
+                alpha=0.55, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(z_t2[:, 0], z_t2[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.75, marker='^', label="Ziel", edgecolors='black', linewidths=0.01)
+                alpha=0.85, marker='^', label="Ziel",
+                edgecolors='black', linewidths=0.02)
+
+    # 去掉坐标轴刻度数值
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
                    labelbottom=False,  # 不显示 x 轴数字
                    labelleft=False)  # 不显示 y 轴数字
 
-
-
-
-    present = np.unique(np.concatenate([y_s, y_t]).astype(int))
-    class_handles = [
-        plt.Line2D([0], [0], marker='s', linestyle='None',
-                   color=cmap(i), label=CLASS_NAMES[i], markersize=8)
-        for i in present
-    ]
-    domain_handles = [
-        plt.Line2D([0], [0], marker='o', color='gray', linestyle='None',
-                   label='Quelle ', markersize=7, alpha=0.5),
-        plt.Line2D([0], [0], marker='^', color='gray', linestyle='None',
-                   label='Ziel ', markersize=8, alpha=0.9)
-    ]
-
-    # plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
-    #            fontsize=9, loc='best', title="Domänen & Klassen")
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_tsne.pdf"),
-                bbox_inches="tight", pad_inches=0.02)
+                bbox_inches="tight", pad_inches=0.015)
     plt.close()
 
     # ---------- PCA 图 ----------
@@ -175,20 +160,18 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
     plt.figure(figsize=(9, 7))
     plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.50, marker='o', label="Quelle", edgecolors='none')
+                alpha=0.55, marker='o', label="Quelle", edgecolors='none')
     plt.scatter(zt[:, 0], zt[:, 1],
                 s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.75, marker='^', label="Ziel", edgecolors='black', linewidths=0.01)
+                alpha=0.85, marker='^', label="Ziel",
+                edgecolors='black', linewidths=0.015)
 
+    # 去掉坐标轴刻度数值
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
                    labelbottom=False,  # 不显示 x 轴数字
                    labelleft=False)  # 不显示 y 轴数字
 
-
-
-    # plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
-    #            fontsize=9, loc='best', title="Domänen & Klassen")
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_pca.pdf"),
                 bbox_inches="tight", pad_inches=0.02)
