@@ -9,28 +9,30 @@ import yaml
 from tqdm import tqdm
 
 
-# 加载配置
+# Load configuration
 with open("../configs/default.yaml", 'r') as f:
-    config = yaml.safe_load(f)['DANN_LMMD_INFO']
+    config = yaml.safe_load(f)['baseline_2']
 
 batch_size = config['batch_size']
 num_layers = config['num_layers']
 kernel_size = config['kernel_size']
 start_channels = config['start_channels']
 
-# 设置设备
+# Setting up the device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 for i in range(10):
-    model_path = f'model/run_{i}/best_model.pth'
+    model_path = f'model/ts/run_{i}/best_model.pth'
     print(f"run{i}start")
-    file = ['../datasets/HC_T197_RP.txt','../datasets/HC_T194_RP.txt','../datasets/HC_T191_RP.txt','../datasets/HC_T188_RP.txt','../datasets/HC_T185_RP.txt']
+    # file = ['../datasets/HC_T197_RP.txt','../datasets/HC_T194_RP.txt','../datasets/HC_T191_RP.txt','../datasets/HC_T188_RP.txt','../datasets/HC_T185_RP.txt']
+    file = ['../datasets/DC_T194_RP.txt', '../datasets/DC_T191_RP.txt',
+            '../datasets/DC_T188_RP.txt', '../datasets/DC_T185_RP.txt']
 
     for item in file:
-        # 加载测试数据
+        # load data
         test_dataset = PKLDataset(item)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-        # 初始化模型
+        # Initialize the model
         model = Flexible_CNN(
             num_layers=num_layers,
             start_channels=start_channels,
@@ -39,14 +41,14 @@ for i in range(10):
             num_classes=10
         ).to(device)
 
-        # 加载模型权重
+        # Loading model weights
         model.load_state_dict(torch.load(model_path, map_location=device))
         model.eval()
 
-        # 定义损失函数
+        # Define loss function
         criterion = nn.CrossEntropyLoss()
 
-        # 评估模型
+        # Evaluation Model
         test_loss = 0.0
         correct = 0
         total = 0

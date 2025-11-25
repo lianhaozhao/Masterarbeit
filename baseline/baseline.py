@@ -17,15 +17,44 @@ from n_PKLDataset import N_PKLDataset,fit_normalizer_from_txt
 #     torch.cuda.manual_seed_all(seed)
 
 def adam_param_groups(model, wd):
+    """
+    Build parameter groups for Adam/AdamW with and without weight decay.
+
+    This function splits model parameters into two groups:
+      1. Parameters that use weight decay (e.g., weights of linear/conv layers)
+      2. Parameters that do NOT use weight decay (e.g., normalization weights and biases)
+
+    Rules:
+      - Skip parameters that do not require gradients (p.requires_grad == False)
+      - 1D parameters (p.ndim == 1), typically normalization layer weights (LayerNorm/GroupNorm/BatchNorm),
+        are put into the no_decay group
+      - Parameters whose names end with ".bias" are put into the no_decay group
+      - All other parameters are put into the decay group
+
+    Args:
+        model (torch.nn.Module): The model whose parameters will be optimized.
+        wd (float): Weight decay factor applied to parameters in the decay group.
+
+    Returns:
+        list[dict]: A list of parameter groups suitable for torch.optim.Adam/AdamW, e.g.:
+            [
+                {"params": decay_params, "weight_decay": wd},
+                {"params": no_decay_params, "weight_decay": 0.0},
+            ]
+    """
     decay, no_decay = [], []
     for n, p in model.named_parameters():
-        if not p.requires_grad: continue
-        if p.ndim == 1 or n.endswith('.bias'):  # LN/GN 权重与 bias
+        if not p.requires_grad:
+            continue
+        if p.ndim == 1 or n.endswith('.bias'):  # norm weights & biases: no weight decay
             no_decay.append(p)
         else:
             decay.append(p)
-    return [{"params": decay, "weight_decay": wd},
-            {"params": no_decay, "weight_decay": 0.0}]
+    return [
+        {"params": decay, "weight_decay": wd},
+        {"params": no_decay, "weight_decay": 0.0},
+    ]
+
 
 
 
@@ -129,7 +158,7 @@ if __name__ == '__main__':
     for i in range(10):
         train_dataset = PKLDataset('../datasets/source/train/DC_T197_RP.txt')
         val_dataset = PKLDataset('../datasets/source/validation/DC_T197_RP.txt')
-        out_path = f"model/run_{i}"
+        out_path = f"model/ts/run_{i}"
         os.makedirs(out_path, exist_ok=True)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
