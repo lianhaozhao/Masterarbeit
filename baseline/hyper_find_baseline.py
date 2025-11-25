@@ -14,7 +14,7 @@ def adam_param_groups(model, wd):
     decay, no_decay = [], []
     for n, p in model.named_parameters():
         if not p.requires_grad: continue
-        if p.ndim == 1 or n.endswith('.bias'):  # LN/GN 权重与 bias
+        if p.ndim == 1 or n.endswith('.bias'):  # norm weights & biases: no weight decay
             no_decay.append(p)
         else:
             decay.append(p)
@@ -51,7 +51,7 @@ def hyper_optimization(trial):
                 Size of the convolution kernel, chosen from {3, 5, 7, 15, 31}.
             - start_channels (int):
                 The number of output channels in the first convolutional layer,
-                chosen from {4, 8}.
+                chosen from {4, 8, 16}.
 
         Workflow:
             1. Sample hyperparameters from the given trial.
@@ -70,12 +70,12 @@ def hyper_optimization(trial):
               based on validation loss, with factor fixed at 0.7 and patience at 3.
     """
 
-    batch_size = trial.suggest_categorical("batch_size", [32])
+    batch_size = trial.suggest_categorical("batch_size", [16,32,64])
     learning_rate = trial.suggest_float("learning_rate", 1e-4, 5e-3, log=True)
     weight_decay = trial.suggest_float("weight_decay", 1e-6, 5e-4, log=True)
     num_layers = trial.suggest_int("num_layers", 4, 6)
-    kernel_size = trial.suggest_categorical("kernel_size", [5, 7, 9, 15])
-    start_channels = trial.suggest_categorical("start_channels", [8, 16])
+    kernel_size = trial.suggest_categorical("kernel_size", [5, 7, 9, 15, 31])
+    start_channels = trial.suggest_categorical("start_channels", [4, 8, 16])
 
     print(f"Trial {trial.number}: batch_size={batch_size}, lr={learning_rate}, wd={weight_decay}, "
           f"layers={num_layers}, channels={start_channels}, kernel_size={kernel_size}")
@@ -103,7 +103,7 @@ def hyper_optimization(trial):
         num_epochs=30, early_stopping_patience=3,scheduler=scheduler,trial = trial
     )
 
-    # 保存超参数
+    # Save hyperparameters
     trial_params = {
         "trial": trial.number,
         "batch_size": batch_size,
@@ -116,7 +116,7 @@ def hyper_optimization(trial):
     }
     out_path = "../datasets/info"
     trial_params_path = os.path.join(out_path, "params_baseline.json")
-    # 如果文件存在，先读取再追加
+    # If the file exists, read it first and then append to it.
     if os.path.exists(trial_params_path):
         with open(trial_params_path, "r") as f:
             all_trials = json.load(f)
@@ -125,7 +125,7 @@ def hyper_optimization(trial):
 
     all_trials.append(trial_params)
 
-    # 回写文件
+    # Write-back file
     with open(trial_params_path, "w") as f:
         json.dump(all_trials, f, indent=4)
 
