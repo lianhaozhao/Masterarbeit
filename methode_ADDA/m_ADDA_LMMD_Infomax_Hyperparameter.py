@@ -605,8 +605,8 @@ def objective_adv_only(trial,
     num_layers = cfg['num_layers']
     ksz = cfg['kernel_size']
     sc = cfg['start_channels']
-    num_epochs = 1
-    source_epoch = 1
+    num_epochs = 15
+    source_epoch = 15
     os.makedirs(out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
