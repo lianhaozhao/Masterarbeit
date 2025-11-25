@@ -14,7 +14,7 @@ from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
 from models.MMD import classwise_mmd_biased_weighted,suggest_mmd_gammas, infomax_loss_from_logits
 
 
-# MCD 的分歧度量
+# MCD's divergence measure
 def discrepancy(logits1, logits2, reduction='mean'):
     p1, p2 = F.softmax(logits1, dim=1), F.softmax(logits2, dim=1)
     d = (p1 - p2).abs().sum(1)
@@ -32,7 +32,7 @@ def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
         return 0.0
     p = (epoch - start_epoch) / max(1, (num_epochs - 1 - start_epoch))
     return (2.0 / (1.0 + np.exp(-3 * p)) - 1.0) * max_lambda
-#  评估（给出 C1/C2/Ensemble）
+#  Evaluation (provide C1/C2/Ensemble)
 @torch.no_grad()
 def MCD_evaluate(model, loader, device):
     model.eval()
@@ -41,7 +41,6 @@ def MCD_evaluate(model, loader, device):
         if isinstance(batch, (tuple, list)) and len(batch) >= 2:
             x, y = batch[0].to(device), batch[1].to(device).long()
         else:
-            # 若没有标签，直接跳过
             continue
         l1, l2, _ = model(x)
         p1, p2 = F.softmax(l1, 1), F.softmax(l2, 1)
@@ -54,7 +53,7 @@ def MCD_evaluate(model, loader, device):
         return float("nan"), float("nan"), float("nan")
     return top1/n, top2/n, topE/n
 
-# ====== MCD 三步训练 ======
+# ====== MCD ======
 def train_mcd(model, src_loader, tgt_loader, device,
               lmmd_start_epoch = 5,ps_loader = None,max_lambda = 0.35,
               num_epochs=50, lr_g=2e-4, lr_c=2e-4, weight_decay=0.0,
@@ -67,7 +66,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
     model.train()
     os.makedirs(save_dir, exist_ok=True)
 
-    # 优化器：GC / 仅C / 仅G
+    # Optimizer: GC / C Only / G Only
     optim_GC = torch.optim.AdamW(
         list(model.feature_extractor.parameters()) + list(model.feature_reducer.parameters()) +
         list(model.c1.parameters()) + list(model.c2.parameters()),
@@ -133,7 +132,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
             else:
                 xpl = ypl = wpl = None
 
-            # ---- Step A: 源域监督 (更新 G, C1, C2) ----
+            # ---- Step A: Source domain supervision (updates G, C1, C2) ----
             model.feature_extractor.train();model.feature_reducer.train();model.c1.train(); model.c2.train()
             optim_GC.zero_grad()
             for _ in range(3):
@@ -145,7 +144,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
                 sumA += lossA.item()
                 countA += 1
 
-            # ---- Step B: 固定 G，最大化目标域分歧（更新 C1/C2）----
+            # ---- Step B: With G fixed, maximize the divergence of the target domain (update C1/C2)----
             model.feature_extractor.eval()
             model.feature_reducer.eval()
             for p in model.feature_extractor.parameters(): p.requires_grad_(False)
@@ -161,16 +160,16 @@ def train_mcd(model, src_loader, tgt_loader, device,
                 l1t = model.c1(ft); l2t = model.c2(ft)
                 disc_t = discrepancy(l1t, l2t, 'mean')
 
-                # 同时维持源域能力，避免崩坏（源域 CE）
+                # Simultaneously maintain source domain capabilities to prevent collapse (source domain CE)
                 ls1_b, ls2_b = model.c1(fs_b), model.c2(fs_b)
                 loss_src_b = F.cross_entropy(ls1_b, ys) + F.cross_entropy(ls2_b, ys)
                 lambda_dis = dis_lambda(epoch,num_epochs,max_lambda=1)
-                lossB = loss_src_b * 0.3 - lambda_dis * disc_t   # 最小化该式 => 最大化分歧
+                lossB = loss_src_b * 0.3 - lambda_dis * disc_t   # Minimize this expression => Maximize the divergence
                 lossB.backward(); optim_C.step()
                 sumB += lossB.item()
             countB += nB
 
-            # ---- Step C: 固定 C1/C2，最小化目标域分歧（更新 G）----
+            # ---- Step C: With C1/C2 fixed, minimize the target domain divergence (update G)----
             for p in model.feature_extractor.parameters(): p.requires_grad_(True)
             for p in model.feature_reducer.parameters(): p.requires_grad_(True)
             model.feature_extractor.train()
@@ -241,7 +240,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
 
     return model
 
-# ====== 入口 ======
+# ====== main ======
 if __name__ == "__main__":
     with open("/content/github/configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
@@ -265,19 +264,19 @@ if __name__ == "__main__":
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-            # 构建数据
+            # Building data
             src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
             ps_loader = get_pseudo_dataloaders(tgt_path, bs)
 
             val_loader = DataLoader(PKLDataset(tgt_test), batch_size=bs, shuffle=False)
 
-            # 构建模型
+            # Building Model
             model = Flexible_MCD(
                 num_layers=num_layers, start_channels=sc, kernel_size=ksz, cnn_act='leakrelu',
                 num_classes=10
             )
 
-            # 训练（MCD）
+            # train（MCD）
             model = train_mcd(
                 model, src_loader, tgt_loader, device,
                 lmmd_start_epoch=3, ps_loader=ps_loader, max_lambda=0.5,

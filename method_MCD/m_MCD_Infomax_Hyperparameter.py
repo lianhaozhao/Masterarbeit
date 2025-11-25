@@ -16,7 +16,7 @@ from models.MMD import classwise_mmd_biased_weighted,suggest_mmd_gammas,infomax_
 from collections import deque
 
 
-# MCD 的分歧度量
+# MCD's divergence measure
 def discrepancy(logits1, logits2, reduction='mean'):
     p1, p2 = F.softmax(logits1, dim=1), F.softmax(logits2, dim=1)
     d = (p1 - p2).abs().sum(1)
@@ -30,7 +30,7 @@ def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
         return 0.0
     p = (epoch - start_epoch) / max(1, (num_epochs - 1 - start_epoch))
     return (2.0 / (1.0 + np.exp(-3 * p)) - 1.0) * max_lambda
-#  评估（给出 C1/C2/Ensemble）
+#  Evaluation (provide C1/C2/Ensemble)
 @torch.no_grad()
 def MCD_evaluate(model, loader, device):
     model.eval()
@@ -39,7 +39,6 @@ def MCD_evaluate(model, loader, device):
         if isinstance(batch, (tuple, list)) and len(batch) >= 2:
             x, y = batch[0].to(device), batch[1].to(device).long()
         else:
-            # 若没有标签，直接跳过
             continue
         l1, l2, _ = model(x)
         p1, p2 = F.softmax(l1, 1), F.softmax(l2, 1)
@@ -52,9 +51,11 @@ def MCD_evaluate(model, loader, device):
         return float("nan"), float("nan"), float("nan")
     return top1/n, top2/n, topE/n
 
-# ====== MCD 三步训练 ======
+# ====== MCD ======
 def train_mcd(model, src_loader, tgt_loader, device,
-              lmmd_start_epoch = 5,ps_loader = None,max_lambda = 0.35,
+              lmmd_start_epoch = 5,ps_loader = None,
+              pseudo_thresh=0.95, T_lmmd=2, max_lambda = 0.35,
+              im_T=1.0, im_weight=0.5,
               num_epochs=15, lr_g=2e-4, lr_c=2e-4, weight_decay=0.0,
               lambda_dis=1.0, nB=4, nC=4,
               ):
@@ -62,7 +63,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
     model.to(device)
     model.train()
 
-    # 优化器：GC / 仅C / 仅G
+    # Optimizer: GC / C Only / G Only
     optim_GC = torch.optim.Adam(
         list(model.feature_extractor.parameters()) + list(model.feature_reducer.parameters()) +
         list(model.c1.parameters()) + list(model.c2.parameters()),
@@ -92,7 +93,7 @@ def train_mcd(model, src_loader, tgt_loader, device,
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, ps_loader, device, threshold=0.95, T=2
+                model, ps_loader, device, threshold=pseudo_thresh, T=T_lmmd
             )
             kept, total = stats["kept"], stats["total"]
             cov, margin_mean = stats["coverage"], stats["margin_mean"]
@@ -128,25 +129,19 @@ def train_mcd(model, src_loader, tgt_loader, device,
             else:
                 xpl = ypl = wpl = None
 
-            # ---- Step A: 源域监督 (更新 G, C1, C2) ----
+            # ---- Step A: Source domain supervision (updates G, C1, C2) ----
             model.feature_extractor.train();model.feature_reducer.train();model.c1.train(); model.c2.train()
             optim_GC.zero_grad()
             for _ in range(2):
                 l1s, l2s, _ = model(xs)
                 loss_src = F.cross_entropy(l1s, ys) + F.cross_entropy(l2s, ys)
-                # 多样性正则（取最后一层线性权重；无 bias）
-                W1 = model.c1.weight  # [C, hidden]
-                W2 = model.c2.weight
-                cos_sim = F.cosine_similarity(W1.flatten(), W2.flatten(), dim=0)
-                loss_div = cos_sim.pow(2)
-
-                lossA = loss_src + 1e-3 * loss_div
+                lossA = loss_src
                 lossA.backward()
                 optim_GC.step()
                 sumA += lossA.item()
                 countA += 1
 
-            # ---- Step B: 固定 G，最大化目标域分歧（更新 C1/C2）----
+            # ---- Step B: With G fixed, maximize the divergence of the target domain (update C1/C2)----
             model.feature_extractor.eval()
             model.feature_reducer.eval()
             for p in model.feature_extractor.parameters(): p.requires_grad_(False)
@@ -162,15 +157,15 @@ def train_mcd(model, src_loader, tgt_loader, device,
                 l1t = model.c1(ft); l2t = model.c2(ft)
                 disc_t = discrepancy(l1t, l2t, 'mean')
 
-                # 同时维持源域能力，避免崩坏（源域 CE）
+                # Simultaneously maintain source domain capabilities to prevent collapse (source domain CE)
                 ls1_b, ls2_b = model.c1(fs_b), model.c2(fs_b)
                 loss_src_b = F.cross_entropy(ls1_b, ys) + F.cross_entropy(ls2_b, ys)
-                lossB = loss_src_b * 0.3 - lambda_dis * disc_t   # 最小化该式 => 最大化分歧
+                lossB = loss_src_b * 0.3 - lambda_dis * disc_t   # Minimize this expression => Maximize the divergence
                 lossB.backward(); optim_C.step()
                 sumB += lossB.item()
             countB += nB
 
-            # ---- Step C: 固定 C1/C2，最小化目标域分歧（更新 G）----
+            # ---- Step C: With C1/C2 fixed, minimize the target domain divergence (update G)----
             for p in model.feature_extractor.parameters(): p.requires_grad_(True)
             for p in model.feature_reducer.parameters(): p.requires_grad_(True)
             model.feature_extractor.train()
@@ -183,10 +178,10 @@ def train_mcd(model, src_loader, tgt_loader, device,
                 optim_G.zero_grad()
                 ft_c = model.feature_extractor(xt)
                 lt1_c, lt2_c = model.c1(ft_c), model.c2(ft_c)
-                loss_im_1, h_cond_1, h_marg_1 = infomax_loss_from_logits(lt1_c, T=1, marg_weight=1)
-                loss_im_2, h_cond_2, h_marg_2 = infomax_loss_from_logits(lt2_c, T=1, marg_weight=1)
+                loss_im_1, h_cond_1, h_marg_1 = infomax_loss_from_logits(lt1_c, T=im_T, marg_weight=1)
+                loss_im_2, h_cond_2, h_marg_2 = infomax_loss_from_logits(lt2_c, T=im_T, marg_weight=1)
                 im += ((h_cond_1-h_marg_1)+(h_cond_2-h_marg_2))/2
-                loss_im = 0.5 *(loss_im_1 + loss_im_2)
+                loss_im = im_weight *(loss_im_1 + loss_im_2)
                 disc_c = discrepancy(lt1_c, lt2_c, 'mean')
                 if it_pl is not None and lambda_lmmd_eff >0:
                     _, _, fs_ = model(xs)
@@ -218,18 +213,8 @@ def train_mcd(model, src_loader, tgt_loader, device,
             best_score = im_avg
             best_state = copy.deepcopy(model.state_dict())
 
-
-        # print("[INFO] Evaluating on target test set...")
-        # test_ds = PKLDataset(tgt_test)
-        # test_loader = DataLoader(test_ds, batch_size=bs, shuffle=False)
-        #
-        # ACC_A, ACC_B, ACC_AVG = MCD_evaluate(model, test_loader, device)
-        # print(f"ACC_A: {ACC_A:0.4f}, ACC_B: {ACC_B:0.4f}, ACC_AVG: {ACC_AVG:0.4f}")
-
-
     if best_state is not None:
         model.load_state_dict(best_state)
-
 
     return model, avg_lossC
 
@@ -238,9 +223,14 @@ def train_mcd(model, src_loader, tgt_loader, device,
 # 只搜对抗专属超参
 def suggest_adv_only(trial):
     params = {
-        "batch_size":    trial.suggest_categorical("batch_size", [64]),  # 可改成 [32, 48, 64]
+        "batch_size":    trial.suggest_categorical("batch_size", [32, 48, 64]),
         "learning_rate": trial.suggest_float("learning_rate",1e-4, 5e-4, log=True),
         "weight_decay":  trial.suggest_float("weight_decay", 1e-5, 5e-4, log=True),
+        "im_weight": trial.suggest_categorical("im_weight", [0.8]),
+        "im_T": trial.suggest_categorical("im_T", [1.0]),
+        "max_lambda": trial.suggest_categorical("max_lambda", [0.35, 0.4, 0.5]),
+        "pseudo_thresh": trial.suggest_categorical("pseudo_thresh", [0.90, 0.95]),
+        "T_lmmd": trial.suggest_categorical("T_lmmd", [1.5, 2]),
     }
     return params
 
@@ -271,7 +261,7 @@ def infomax_unsup_score_from_loader(model, source_loader, target_loader, device,
 def objective_adv_only(trial,
                        dataset_configs=None,
                        out_dir='../datasets/info_optuna_dann',
-                       n_repeats=1,  # 每个数据集内部的重复次数
+                       n_repeats=2,  # 每个数据集内部的重复次数
                        ):
     with open("../configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
@@ -302,7 +292,9 @@ def objective_adv_only(trial,
             # 训练（MCD）
             model, avg_lossC = train_mcd(
                 model, src_tr, tgt_tr, device,
-                lmmd_start_epoch=3, ps_loader=ps_loader, max_lambda=0.5,
+                lmmd_start_epoch=3, ps_loader=ps_loader,
+                pseudo_thresh=p["pseudo_thresh"], T_lmmd=p["T_lmmd"], max_lambda=p["max_lambda"],
+                im_T=p["im_T"], im_weight=p["im_weight"],
                 num_epochs=num_epochs,
                 lr_g=p["learning_rate"],
                 lr_c=p["learning_rate"],
@@ -341,20 +333,24 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # 直接搜索对抗专属超参
+    # Direct search for dedicated hyperparameters for combat
     sampler = optuna.samplers.NSGAIISampler()
     study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
 
     study.optimize(lambda t: objective_adv_only(
         t,
-        [  # 多个数据集组合
+        [  # Combination of multiple datasets
             {
                 "source_train": "../datasets/source/train/DC_T197_RP.txt",
                 "target_train": "../datasets/target/train/HC_T185_RP.txt",
             },
             {
                 "source_train": "../datasets/source/train/DC_T197_RP.txt",
-                "target_train": "../datasets/target/train/HC_T185_RP.txt",
+                "target_train": "../datasets/target/train/HC_T188_RP.txt",
+            },
+            {
+                "source_train": "../datasets/source/train/DC_T197_RP.txt",
+                "target_train": "../datasets/target/train/HC_T191_RP.txt",
             },
         ],
         out_dir  = '../datasets/info_optuna_dann',
