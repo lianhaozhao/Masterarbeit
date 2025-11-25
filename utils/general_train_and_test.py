@@ -280,11 +280,11 @@ def general_test_model_plot(model, criterion, general_test_loader, device,
     val_accuracy = correct_val / total_val_samples
     print(f"- test Loss: {val_loss:.6f}, test Acc: {val_accuracy:.4f}")
 
-    # ======== 混淆矩阵（原始计数） ========
+    # ======== Confusion matrix (raw count) ========
     class_labels = ['R05', 'R10', 'R15', 'R20', 'R25', 'R30', 'R35', 'R40', 'R45', 'R50']
     cm = confusion_matrix(trues_all, preds_all, labels=np.arange(len(class_labels)))
 
-    # ======== 绘制 ========
+    # ======== draw ========
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
     disp.plot(cmap='Blues', xticks_rotation=45, values_format="d")
     plt.title(f"Confusion Matrix (Raw Counts) | Acc={val_accuracy:.4f}")
@@ -298,13 +298,13 @@ def general_test_model_plot(model, criterion, general_test_loader, device,
     else:
         plt.show()
 
-    # ======== 保存混淆矩阵表格 ========
+    # ======== Save the confusion matrix table ========
     df_cm_raw = pd.DataFrame(cm, index=class_labels, columns=class_labels)
     if save_cm_table:
         os.makedirs(os.path.dirname(cm_table_path), exist_ok=True)
         df_cm_raw.to_csv(cm_table_path, float_format="%.0f")
 
-    # ======== 分类报告 ========
+    # ======== Classification Report ========
     report_dict = classification_report(
         trues_all, preds_all, target_names=class_labels, output_dict=True, zero_division=0
     )
