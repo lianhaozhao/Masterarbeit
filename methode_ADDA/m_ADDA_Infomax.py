@@ -17,7 +17,7 @@ def adam_param_groups(named_params, weight_decay):
     for n, p in named_params:
         if not p.requires_grad:
             continue
-        if p.ndim == 1 or n.endswith(".bias"):  # BN/LayerNorm 权重 & bias 不做 decay
+        if p.ndim == 1 or n.endswith(".bias"):
             no_decay.append(p)
         else:
             decay.append(p)
@@ -32,32 +32,38 @@ def copy_encoder_params(src_model, tgt_model, device):
     tgt_model.to(device)
 
 
-# ===== 新增：阶段1 —— 仅用源域训练 (F_s + C) =====
+# Phase 1 – Training using only the source domain (F_s + C)
 def pretrain_source_classifier(
         src_model,
         source_loader,
-        optimizer,lr_d,weight_decay,
+        optimizer,
         criterion_cls,
         device,
         num_epochs=5,
         scheduler=None,
+        save_path=None,
 ):
     """
-    - 源域：交叉熵 -> 更新 feature_extractor + classifier
-    - 目标域：InfoMax 仅更新 classifier（对 feature_extractor 用 eval()+no_grad 提特征）
-    - 可选：epoch 末再做一遍 target-only InfoMax，扩大目标覆盖
+    Source domain pre-training:
+    - Use only cross-entropy (CE)
+    - Update feature extractor + classification head
+    - With early stopping mechanism
     """
     src_model.train()
+    best_loss = float("inf")
+    best_state = None
+    patience = 0
+    PATIENCE_LIMIT = 3
 
     for epoch in range(num_epochs):
+        src_model.train()
         tot_loss = tot_n = 0.0
 
-        # 源域 CE + 目标域 InfoMax（只训分类头）的混合小循环
+        # ===== Source Domain CE Training =====
         for xb, yb in source_loader:
             xb, yb = xb.to(device), yb.to(device)
 
-            # 1) 源域监督 CE：正常 forward（允许更新提取器与分类头）
-            logits_s, _ = src_model(xb)
+            logits_s, _, _ = src_model(xb)
             loss = criterion_cls(logits_s, yb)
 
             optimizer.zero_grad()
@@ -68,27 +74,46 @@ def pretrain_source_classifier(
             tot_loss += loss.item() * bs
             tot_n += bs
 
-        print(f"[SRC PRETRAIN+IM] Epoch {epoch + 1}/{num_epochs} | "
-              f"Loss:{tot_loss / max(1, tot_n):.4f} ")
+        epoch_loss = tot_loss / max(1, tot_n)
+        print(f"[SRC] Epoch {epoch + 1}/{num_epochs} | Loss: {epoch_loss:.4f}")
 
+        # ===== Early Stop Logic =====
+        if epoch_loss < best_loss - 1e-6:
+            best_loss = epoch_loss
+            best_state = copy.deepcopy(src_model.state_dict())
+            patience = 0
+
+        else:
+            patience += 1
+
+        if patience >= PATIENCE_LIMIT:
+            print(f"[EARLY STOP] No improvement for {PATIENCE_LIMIT} epochs, stop training.")
+            break
+
+        # ===== Learning rate scheduling =====
         if scheduler is not None:
             scheduler.step()
 
+    if best_state is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        torch.save(best_state, save_path)
+        src_model.load_state_dict(best_state)
+
     return src_model
 
-# ===== 新增：阶段2 —— ADDA 对抗 + InfoMax  =====
+# ===== Phase 2 – ADDA Confrontation + InfoMax  =====
 def train_adda_infomax(
     src_model, tgt_model, source_loader, target_loader,
     device, num_epochs=20, num_classes=10,batch_size=16,
-    # 判别器/优化器
+    # Discriminator/Optimizer
     lr_ft=1e-4, lr_d=1e-4, wd=0.0,d_steps =1 ,ft_steps =1 ,
     # InfoMax
-    im_T=1.0, im_weight=0.5, im_marg_w=1.0,
+    im_T=1.0, im_weight=0.5, im_marg_w=1.0, path=None
 ):
-    # 1) 冻结源模型 (完全固定 F_s + C)
+    # 1) Frozen source model (completely fixed F_s + C)
     src_model.eval(); freeze(src_model)
 
-    # 2) 冻结目标模型的 classifier，只训练其 encoder
+    # 2) Freeze the classifier of the target model and train only its encoder.
     for p in tgt_model.classifier.parameters():
         p.requires_grad = False
     enc_named_params = []
@@ -96,19 +121,19 @@ def train_adda_infomax(
         if ("feature_extractor" in n) or ("feature_reducer" in n):
             enc_named_params.append((n, p))
 
-    opt_ft = torch.optim.Adam(
+    opt_ft = torch.optim.AdamW(
         adam_param_groups(enc_named_params, wd),
         lr=lr_ft
     )
 
-    # 3) 通过一个 batch 推断特征维度，按需构造 D
+    # 3) Infer feature dimensions from a batch and construct D on demand.
     with torch.no_grad():
         xb_s, yb_s = next(iter(source_loader))
         xb_s = xb_s.to(device)
-        _ , feat_s= src_model(xb_s)
+        _ , feat_s, _ = src_model(xb_s)
         feat_dim = feat_s.size(1)
     D = DomainClassifier(feature_dim=feat_dim).to(device)
-    opt_d = torch.optim.Adam(
+    opt_d = torch.optim.AdamW(
         adam_param_groups(D.named_parameters(), wd),
         lr=lr_d
     )
@@ -117,20 +142,19 @@ def train_adda_infomax(
     best_loss = float("inf")
     best_state = None
 
-    # 4) 训练循环（交替优化 D 和 F_t）
+    # 4) Training loop (alternating optimization of D and F_t)
     for epoch in range(num_epochs):
-
         it_src, it_tgt = iter(source_loader), iter(target_loader)
         len_src, len_tgt = len(source_loader), len(target_loader)
         steps = max(len_src, len_tgt)
-        #新的迭代器
+        #New iterator
         it_tgt_ft = iter(target_loader)
 
         tgt_model.train()
         tgt_model.classifier.eval()
         D.train()
 
-        # 统计
+        # count
         d_loss_sum = g_loss_sum = im_loss_sum = ft_loss_sum = 0.0
         d_acc_sum = 0.0; d_cnt = 0
 
@@ -144,11 +168,11 @@ def train_adda_infomax(
             if isinstance(xt, (tuple,list)): xt = xt[0]
             xs, ys, xt = xs.to(device), ys.to(device), xt.to(device)
 
-            #(A) 训练 D: max log D(F_s(xs)) + log (1 - D(F_t(xt)))
+            #(A) train D: max log D(F_s(xs)) + log (1 - D(F_t(xt)))
             for _k in range(d_steps):
                 with torch.no_grad():
-                    _, f_s= src_model(xs)       # [B, d]
-                    _, f_t= tgt_model(xt)       # [B, d]
+                    _, f_s, _ = src_model(xs)       # [B, d]
+                    _, f_t, _ = tgt_model(xt)       # [B, d]
                 d_in  = torch.cat([f_s, f_t], dim=0)
                 d_lab = torch.cat([torch.ones(f_s.size(0)), torch.zeros(f_t.size(0))], dim=0).long().to(device)  # 1=source,0=target
                 d_out = D(d_in)
@@ -166,7 +190,7 @@ def train_adda_infomax(
                     d_acc_sum += d_acc; d_cnt += 1
                     d_loss_sum += loss_d.item()
 
-            # (B) 训练 F_t: min 交叉熵(D(F_t(xt)), “source”标签)
+            # (B) Training F_t: min cross-entropy(D(F_t(xt)), “source” label)
             D.eval()
             for p in D.parameters():
                 p.requires_grad = False
@@ -174,7 +198,7 @@ def train_adda_infomax(
 
             for _k in range(ft_steps):
                 if _k == 0 and xt_last is not None:
-                    xt_ft = xt_last.to(device)  # 复用 D 的最后一个 batch
+                    xt_ft = xt_last.to(device)  # Reuse the last batch of D
                 else:
                     try:
                         xt_ft = next(it_tgt_ft)
@@ -182,13 +206,12 @@ def train_adda_infomax(
                         it_tgt_ft = iter(target_loader)
                         xt_ft = next(it_tgt_ft)
                 xt_ft = xt_ft.to(device)
-                _, f_t  = tgt_model(xt_ft)
-                fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # 让 D 预测成“source” -1
+                logits_t, f_t, _  = tgt_model(xt_ft)
+                fool_lab = torch.ones(f_t.size(0), dtype=torch.long, device=device)  # Let D predict "source" -1
                 g_out = D(f_t)
                 loss_g = c_dom(g_out, fool_lab)
 
-                # InfoMax 正则 —— 更自信但不塌缩
-                logits_t = tgt_model.classifier(f_t)
+                # InfoMax
                 loss_im, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=im_T, marg_weight=im_marg_w)
                 loss_im = im_weight * loss_im
 
@@ -206,7 +229,7 @@ def train_adda_infomax(
             for p in D.parameters():
                 p.requires_grad = True
             D.train()
-        # 打印
+        # print
         print(
             f"[ADDA] Ep {epoch + 1}/{num_epochs} | "
             f"D:{d_loss_sum / max(1, steps * d_steps):.4f} | "
@@ -220,14 +243,9 @@ def train_adda_infomax(
                 best_loss = im_loss_sum
                 best_state = copy.deepcopy(tgt_model.state_dict())
 
-
-        print("[INFO] Evaluating on target test set...")
-        target_test_path = '../datasets/target/test/HC_T185_RP.txt'
-        test_dataset = PKLDataset(target_test_path)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        general_test_model(tgt_model, c_dom, test_loader, device)
-
         if best_state is not None:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            torch.save(best_state, path)
             tgt_model.load_state_dict(best_state)
 
     return tgt_model
@@ -242,39 +260,41 @@ if __name__ == "__main__":
     wd = 2.5998797192251337e-05
 
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
-    num_epochs = 20
-    pre_epochs = 6
+    num_epochs = 15
+    pre_epochs = 15
 
-    files = [185]
-    # files = [185, 188, 191, 194, 197]
+    files = [185, 188, 191, 194, 197]
     for file in files:
-        src_path = '../datasets/source/train/DC_T197_RP.txt'
-        tgt_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        tgt_test = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
+        src_path = '../datasets/DC_T197_RP.txt'
+        tgt_path = '../datasets/HC_T{}_RP.txt'.format(file)
+        tgt_test = '../datasets/HC_T{}_RP.txt'.format(file)
 
         print(f"[INFO] Loading HC_T{file} ...")
 
-        for run_id in range(5):
+        for run_id in range(10):
             print(f"\n========== RUN {run_id} (ADDA) ==========")
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-            # —— 阶段1：建立并训练源域模型 Fs + C （复用 Flexible_DANN 但不使用其域头/GRL）
+            # —— Phase 1: Build and train the source domain model Fs + C
+            # (reuse Flexible_DANN but do not use its domain header/GRL)
             src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                       cnn_act='leakrelu', num_classes=10).to(device)
 
             src_loader, tgt_loader = get_dataloaders(src_path, tgt_path, bs)
-            optimizer_src = torch.optim.Adam(
+            optimizer_src = torch.optim.AdamW(
                 adam_param_groups(src_model.named_parameters(), wd_pre),
                 lr=lr_pre
             )
-            scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=5, eta_min=lr_pre * 0.1)
+            scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer_src, T_max=15, eta_min=lr_pre * 0.1)
             src_cls = nn.CrossEntropyLoss()
 
             print("[INFO] SRC pretrain (Fs + C) ...")
-            src_model = pretrain_source_classifier(src_model, src_loader, optimizer_src,lr_pre,wd_pre, src_cls, device,
-                                       num_epochs=pre_epochs, scheduler=scheduler_src)
+            src_model = pretrain_source_classifier(src_model, src_loader, optimizer_src, src_cls,
+                                                   device,
+                                                   num_epochs=pre_epochs, scheduler=scheduler_src,
+                                                   save_path=f"/content/drive/MyDrive/Masterarbeit/ADDA_INFOMAX/Model_Pre/HC_T{file}/RUN{run_id}.pth")
 
-            # —— 阶段2：初始化目标编码器 Ft（从 Fs 拷贝），训练 ADDA（+可选IM）
+            # ——Phase 2: Initialize the target encoder Ft (copied from Fs), and train ADDA+IM.
             tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                       cnn_act='leakrelu', num_classes=10).to(device)
             copy_encoder_params(src_model, tgt_model, device)
@@ -283,12 +303,12 @@ if __name__ == "__main__":
             tgt_model = train_adda_infomax(
                 src_model, tgt_model, src_loader, tgt_loader, device,
                 num_epochs=num_epochs, num_classes=10,batch_size=bs,
-                # 判别器/优化器
+                # Discriminator/Optimizer
                 lr_ft=lr, lr_d=lr*2, wd=wd,d_steps =1 ,ft_steps =2 ,
                 # InfoMax
                 im_T=1.0, im_weight=0.8, im_marg_w=1.0,
+                path=f"/content/drive/MyDrive/Masterarbeit/ADDA_INFOMAX/Model/HC_T{file}/RUN{run_id}.pth",
             )
-
 
             print("[INFO] Evaluating on target test set...")
             test_ds = PKLDataset(tgt_test)

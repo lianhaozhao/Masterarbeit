@@ -19,7 +19,7 @@ def adam_param_groups(named_params, weight_decay):
     for n, p in named_params:
         if not p.requires_grad:
             continue
-        if p.ndim == 1 or n.endswith(".bias"):  # BN/LayerNorm 权重 & bias 不做 decay
+        if p.ndim == 1 or n.endswith(".bias"):
             no_decay.append(p)
         else:
             decay.append(p)
@@ -41,6 +41,118 @@ def copy_encoder_params(src_model, tgt_model, device):
     tgt_model.load_state_dict(copy.deepcopy(src_model.state_dict()))
     tgt_model.to(device)
 
+def _standardize_feat(Z, eps=1e-6):
+    mu = Z.mean(dim=0, keepdim=True)
+    std = Z.std(dim=0, keepdim=True).clamp_min(eps)
+    return (Z - mu) / std
+
+def _shrink_cov(S, alpha=0.1, eps=1e-12):
+    d = S.size(0)
+    tr = torch.trace(S).clamp_min(eps)
+    target = (tr / d) * torch.eye(d, dtype=S.dtype, device=S.device)
+    return (1 - alpha) * S + alpha * target
+
+def _weighted_mean(X, w=None, eps=1e-8):
+    # X: [n,d], w: [n]
+    if w is None:
+        return X.mean(dim=0, keepdim=True)  # [1,d]
+    w = w.view(-1, 1)
+    s = torch.clamp(w.sum(), min=eps)
+    return (w * X).sum(dim=0, keepdim=True) / s
+
+def _weighted_cov(X, w=None, eps=1e-8, unbiased=False):
+    """
+    Return the weighted covariance matrix Σ: [d,d]
+    X: [n,d], w: [n]
+    """
+    n, d = X.shape
+    if n <= 1:
+        return X.new_zeros(d, d)
+    if w is None:
+        mu = X.mean(dim=0, keepdim=True)                    # [1,d]
+        Xc = X - mu
+        # Unweighted: Equivalent to (Xc^T Xc) / (n-1) (if unbiased)
+        denom = (n - 1 if unbiased and n > 1 else n)
+        return (Xc.t() @ Xc) / max(1.0, float(denom))
+    else:
+        w = w.view(-1, 1)                                   # [n,1]
+        s = torch.clamp(w.sum(), min=eps)
+        mu = (w * X).sum(dim=0, keepdim=True) / s           # [1,d]
+        Xc = X - mu
+        # Weighted covariance: Xc^T diag(w) Xc / s
+        # (Common definition; weighted correction terms can be added if unbiased correction is needed)
+        Sigma = (Xc.t() @ (w * Xc)) / s
+        return Sigma
+
+def coral_loss_from_cov(S_s, S_t, norm='fro', eps=1e-12):
+    """
+    Standard CORAL: || S_s - S_t ||_F^2
+    Optional normalization can be used to avoid the impact of dimensional/scale differences on weights.
+    """
+    D = S_s - S_t
+    if norm == 'fro':
+        return (D * D).sum()
+    elif norm == 'trace':
+        # Trace normalization: Divide by d^2 (or 4d^2), etc. Common implementations will perform a constant scaling.
+        d = S_s.size(0)
+        return (D * D).sum() / (d * d + eps)
+    else:
+        return (D * D).sum()
+
+def classwise_coral_weighted(
+    feat_src, y_src, feat_tgt, y_tgt, w_tgt,
+    num_classes,
+    min_count_per_class=2,
+    add_mean_align=True,         # Should an additional class mean alignment term be added?
+    mean_weight=1.0,             # Coefficient of mean term
+    cov_norm='trace',            # 'fro' or 'trace'
+    unbiased_cov=False           # Should n-1 be used for unauthorized situations?
+):
+    """
+    Class-conditional CORAL: For each class c, align the source/target covariance (and optional mean).
+    The outer layer uses a weighted average of min(ns, nt) across all classes.
+    The target side uses w_tgt as the sample weights.
+    """
+    total = feat_src.new_tensor(0.0)
+    wsum = 0.0
+
+    for c in range(num_classes):
+        ms = (y_src == c)
+        mt = (y_tgt == c)
+        ns, nt = int(ms.sum()), int(mt.sum())
+        if ns >= min_count_per_class and nt >= min_count_per_class:
+            Xs0 = feat_src[ms]  # Original features (used for mean)
+            Xt0 = feat_tgt[mt]
+            wt = w_tgt[mt]
+
+            # 1) Mean alignment (using original features)
+            if add_mean_align:
+                mus0 = _weighted_mean(Xs0, w=None)
+                mut0 = _weighted_mean(Xt0, w=wt)
+                loss_mean = F.mse_loss(mus0, mut0, reduction='sum')  # Or normalize by dimension, see below.
+            else:
+                loss_mean = 0.0
+
+            # 2) Covariance alignment (using standardized features to stabilize covariance)
+            Xs = _standardize_feat(Xs0)
+            Xt = _standardize_feat(Xt0)
+            Cs = _weighted_cov(Xs, w=None, unbiased=unbiased_cov)
+            Ct = _weighted_cov(Xt, w=wt, unbiased=False)
+
+            alpha_s = float(min(0.2, 8.0 / max(1, Xs.size(0))))
+            alpha_t = float(min(0.2, 8.0 / max(1, Xt.size(0))))
+            Cs = _shrink_cov(Cs, alpha=alpha_s)
+            Ct = _shrink_cov(Ct, alpha=alpha_t)
+
+            loss_c = coral_loss_from_cov(Cs, Ct, norm=cov_norm)
+            loss_c = loss_c + mean_weight * loss_mean
+
+            # Class weight
+            w = float(min(ns, nt))
+            total = total + loss_c * w
+            wsum += w
+
+    return total / wsum if wsum > 0 else total
 
 # Phase 1 – Training using only the source domain (F_s + C)
 def pretrain_source_classifier(
@@ -69,7 +181,7 @@ def pretrain_source_classifier(
         src_model.train()
         tot_loss = tot_n = 0.0
 
-        # ===== Source Domain CE Training  =====
+        # ===== Source Domain CE Training =====
         for xb, yb in source_loader:
             xb, yb = xb.to(device), yb.to(device)
 
@@ -87,7 +199,7 @@ def pretrain_source_classifier(
         epoch_loss = tot_loss / max(1, tot_n)
         print(f"[SRC] Epoch {epoch + 1}/{num_epochs} | Loss: {epoch_loss:.4f}")
 
-        # =====Early Stop Logic  =====
+        # ===== Early Stop Logic =====
         if epoch_loss < best_loss - 1e-6:
             best_loss = epoch_loss
             best_state = copy.deepcopy(src_model.state_dict())
@@ -112,16 +224,16 @@ def pretrain_source_classifier(
     return src_model
 
 
-# Phase 2 – ADDA + InfoMax +lmmd
-def train_adda_infomax_lmmd(
+# Phase 2 – ADDA Confrontation + InfoMax
+def train_adda_infomax_coral(
         src_model, tgt_model, source_loader, target_loader,
         device, num_epochs=20, num_classes=10, batch_size=16,
         # Discriminator/Optimizer
         lr_ft=1e-4, lr_d=1e-4, wd=0.0, d_steps=1, ft_steps=1,
         # InfoMax
         im_T=1.0, im_weight=0.5, im_marg_w=1.0,
-        # Pseudo+LMMD
-        lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=35e-2, path=None,
+        # Pseudo+coral
+        coral_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=35e-2, path=None,
 ):
     # 1) Frozen source model (completely fixed F_s + C)
     src_model.eval()
@@ -165,7 +277,7 @@ def train_adda_infomax_lmmd(
         cached_gammas = None
         pseudo_x = pseudo_y = pseudo_w = None
         cov = margin_mean = 0.0
-        if epoch >= lmmd_start_epoch:
+        if epoch >= coral_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
                 tgt_model, target_loader, device, threshold=pseudo_thresh, T=T_lmmd
             )
@@ -173,12 +285,13 @@ def train_adda_infomax_lmmd(
             if pseudo_x.numel() > 0:
                 pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
                 pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
-        lambda_mmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=lmmd_start_epoch)
+        lambda_coral_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=coral_start_epoch)
 
         it_src, it_tgt = iter(source_loader), iter(target_loader)
         it_pl = iter(pl_loader) if pl_loader is not None else None
         len_src, len_tgt = len(source_loader), len(target_loader)
         steps = max(len_src, len_tgt)
+        # New iterator
         it_tgt_ft = iter(target_loader)
 
         tgt_model.train()
@@ -204,7 +317,7 @@ def train_adda_infomax_lmmd(
             if isinstance(xt, (tuple, list)): xt = xt[0]
             xs, ys, xt = xs.to(device), ys.to(device), xt.to(device)
 
-            # (A) train D: max log D(F_s(xs)) + log (1 - D(F_t(xt)))
+            # (A) training D: max log D(F_s(xs)) + log (1 - D(F_t(xt)))
             for _k in range(d_steps):
                 with torch.no_grad():
                     _, f_s, _ = src_model(xs)  # [B, d]
@@ -220,7 +333,7 @@ def train_adda_infomax_lmmd(
 
                 xt_last = xt.detach()
 
-                # record D acc
+                # Record D acc
                 with torch.no_grad():
                     pred = d_out.argmax(1)
                     d_acc = (pred == d_lab).float().mean().item()
@@ -249,49 +362,46 @@ def train_adda_infomax_lmmd(
                 loss_g = c_dom(g_out, fool_lab)
 
                 # InfoMax
-
                 loss_im, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=im_T, marg_weight=im_marg_w)
                 loss_im = im_weight * loss_im
 
-                # LMMD：Use source tags and target pseudo tags for class conditional alignment.
-                if it_pl is not None:
+                # CORAL：Use source tags and target pseudo tags for class conditional alignment.
+                if it_pl is not None and lambda_coral_eff > 0:
                     try:
                         xpl, ypl, wpl = next(it_pl)
                     except StopIteration:
                         it_pl = iter(pl_loader)
                         xpl, ypl, wpl = next(it_pl)
                     xpl, ypl, wpl = xpl.to(device), ypl.to(device), wpl.to(device)
-                    _, _, f_s_n = src_model(xs)
-                    f_s_n = F.normalize(f_s_n, dim=1)
-                    _, _, f_t_pl = tgt_model(xpl)
-                    f_t_pl_n = F.normalize(f_t_pl, dim=1)
-                    if cached_gammas is None:
-                        cached_gammas = suggest_mmd_gammas(f_s_n.detach(), f_t_pl_n.detach())
-                    loss_lmmd = classwise_mmd_biased_weighted(
-                        f_s_n, ys, f_t_pl_n, ypl, wpl,
-                        num_classes=num_classes, gammas=cached_gammas, min_count_per_class=2
+                    was_training = tgt_model.training
+                    tgt_model.eval()
+                    with torch.no_grad():
+                        _, _, feat_src_coral = src_model(xs)
+                    _, _, feat_tgt_coral = tgt_model(xpl)
+                    tgt_model.train(was_training)
+                    loss_coral = classwise_coral_weighted(
+                        feat_src_coral, ys, feat_tgt_coral, ypl, wpl,
+                        num_classes=num_classes, min_count_per_class=2
                     )
-                    loss_lmmd = lambda_mmd_eff * loss_lmmd
+                    loss_coral = lambda_coral_eff * loss_coral
                 else:
-                    loss_lmmd = f_t.new_tensor(0.0)
+                    loss_coral = f_t.new_tensor(0.0)
 
-                loss_ft = loss_g + loss_im + loss_lmmd
+                loss_ft = loss_g + loss_im + loss_coral
                 opt_ft.zero_grad()
                 loss_ft.backward()
                 opt_ft.step()
-
                 def to_scalar(x):
                     return x.detach().item() if torch.is_tensor(x) else float(x)
-
                 g_loss_sum += to_scalar(loss_g)
                 im_loss_sum += to_scalar(loss_im)
-                mmd_loss_sum += to_scalar(loss_lmmd)
+                mmd_loss_sum += to_scalar(loss_coral)
                 ft_loss_sum += to_scalar(loss_ft)
             for p in D.parameters():
                 p.requires_grad = True
             D.train()
 
-        # print
+        # PRINT
         print(
             f"[ADDA] Ep {epoch + 1}/{num_epochs} | "
             f"D:{d_loss_sum / max(1, steps * d_steps):.4f} | "
@@ -300,7 +410,7 @@ def train_adda_infomax_lmmd(
             f"LMMD:{mmd_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"FT(total):{ft_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"D-acc:{d_acc_sum / max(1, d_cnt):.4f} | "
-            f"cov:{cov:.2%} margin:{margin_mean:.3f} | lambda_mmd_eff:{float(lambda_mmd_eff):.4f}"
+            f"cov:{cov:.2%} margin:{margin_mean:.3f} | lambda_coral_eff:{float(lambda_coral_eff):.4f}"
         )
         scr = im_loss_sum / max(1, steps * ft_steps)
         if epoch > 10:
@@ -308,10 +418,11 @@ def train_adda_infomax_lmmd(
                 best_loss = scr
                 best_state = copy.deepcopy(tgt_model.state_dict())
 
-        if best_state is not None:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            torch.save(best_state, path)
-            tgt_model.load_state_dict(best_state)
+
+    if best_state is not None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save(best_state, path)
+        tgt_model.load_state_dict(best_state)
 
     return tgt_model
 
@@ -343,7 +454,7 @@ if __name__ == "__main__":
             print(f"\n========== RUN {run_id} (ADDA) ==========")
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-            # —— Phase 1: Building and training the source domain model Fs + C
+            # — Phase 1: Building and training the source domain model Fs + C
             src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                       cnn_act='leakrelu', num_classes=10).to(device)
 
@@ -361,14 +472,14 @@ if __name__ == "__main__":
             src_model = pretrain_source_classifier(src_model, src_loader, optimizer_src, src_cls,
                                                    device,
                                                    num_epochs=pre_epochs, scheduler=scheduler_src,
-                                                   save_path=f"/content/drive/MyDrive/Masterarbeit/ADDA/Model_Pre/HC_T{file}/RUN{run_id}.pth")
-            # —— Phase 2: Initialize the target encoder Ft (copied from Fs), train ADDA + IM +LMMD
+                                                   save_path=f"/content/drive/MyDrive/Masterarbeit/ADDA_coral_infomax/Model_Pre/HC_T{file}/RUN{run_id}.pth")
+            #— Phase 2: Initialize the target encoder Ft (copied from Fs), train ADDA + IM + CORAL
             tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                       cnn_act='leakrelu', num_classes=10).to(device)
             copy_encoder_params(src_model, tgt_model, device)
 
-            print("[INFO] ADDA stage (Ft vs D) + optional InfoMax ...")
-            tgt_model = train_adda_infomax_lmmd(
+            print("[INFO] ADDA stage (Ft vs D) + optional InfoMax + CORAL...")
+            tgt_model = train_adda_infomax_coral(
                 src_model, tgt_model, src_loader, tgt_loader, device,
                 num_epochs=num_epochs, num_classes=10, batch_size=bs,
                 # Discriminator/Optimizer
@@ -376,8 +487,8 @@ if __name__ == "__main__":
                 # InfoMax
                 im_T=1.0, im_weight=0.8, im_marg_w=1.0,
                 # LMMD
-                lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.5,
-                path=f"/content/drive/MyDrive/Masterarbeit/ADDA/Model/HC_T{file}/RUN{run_id}.pth",
+                coral_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.5,
+                path=f"/content/drive/MyDrive/Masterarbeit/ADDA_coral_infomax/Model/HC_T{file}/RUN{run_id}.pth",
             )
 
             print("[INFO] Evaluating on target test set...")

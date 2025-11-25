@@ -1,25 +1,23 @@
-import copy, math, random, os
+import copy
 import yaml
-from collections import deque
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
-from models.Flexible_ADDA import Flexible_ADDA, freeze, unfreeze, DomainClassifier
+from models.Flexible_ADDA import Flexible_ADDA, freeze, DomainClassifier
 from PKLDataset import PKLDataset
 from models.get_no_label_dataloader import get_dataloaders
 from utils.general_train_and_test import general_test_model
-from models.MMD import classwise_mmd_biased_weighted, suggest_mmd_gammas, infomax_loss_from_logits
-from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
-
+from models.MMD import infomax_loss_from_logits
+import os
 
 def adam_param_groups(named_params, weight_decay):
     decay, no_decay = [], []
     for n, p in named_params:
         if not p.requires_grad:
             continue
-        if p.ndim == 1 or n.endswith(".bias"):  # BN/LayerNorm 权重 & bias 不做 decay
+        if p.ndim == 1 or n.endswith(".bias"):
             no_decay.append(p)
         else:
             decay.append(p)
@@ -28,19 +26,10 @@ def adam_param_groups(named_params, weight_decay):
         {"params": no_decay, "weight_decay": 0.0},
     ]
 
-
-def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
-    if epoch < start_epoch:
-        return 0.0
-    p = (epoch - start_epoch) / max(1, (num_epochs - 1 - start_epoch))
-    return (2.0 / (1.0 + np.exp(-5 * p)) - 1.0) * max_lambda
-
-
 @torch.no_grad()
 def copy_encoder_params(src_model, tgt_model, device):
     tgt_model.load_state_dict(copy.deepcopy(src_model.state_dict()))
     tgt_model.to(device)
-
 
 # Phase 1 – Training using only the source domain (F_s + C)
 def pretrain_source_classifier(
@@ -54,10 +43,10 @@ def pretrain_source_classifier(
         save_path=None,
 ):
     """
-    Source domain pre-training:
-    - Use only cross-entropy (CE)
-    - Update feature extractor + classification head
-    - With early stopping mechanism
+        Source domain pre-training:
+        - Use only cross-entropy (CE)
+        - Update feature extractor + classification head
+        - With early stopping mechanism
     """
     src_model.train()
     best_loss = float("inf")
@@ -69,7 +58,7 @@ def pretrain_source_classifier(
         src_model.train()
         tot_loss = tot_n = 0.0
 
-        # ===== Source Domain CE Training  =====
+        # ===== Source Domain CE Training =====
         for xb, yb in source_loader:
             xb, yb = xb.to(device), yb.to(device)
 
@@ -87,7 +76,7 @@ def pretrain_source_classifier(
         epoch_loss = tot_loss / max(1, tot_n)
         print(f"[SRC] Epoch {epoch + 1}/{num_epochs} | Loss: {epoch_loss:.4f}")
 
-        # =====Early Stop Logic  =====
+        # ===== Early Stop Logic =====
         if epoch_loss < best_loss - 1e-6:
             best_loss = epoch_loss
             best_state = copy.deepcopy(src_model.state_dict())
@@ -112,16 +101,13 @@ def pretrain_source_classifier(
     return src_model
 
 
-# Phase 2 – ADDA + InfoMax +lmmd
+# Phase 2 – ADDA Confrontation
 def train_adda_infomax_lmmd(
         src_model, tgt_model, source_loader, target_loader,
-        device, num_epochs=20, num_classes=10, batch_size=16,
+        device, num_epochs=20,
         # Discriminator/Optimizer
         lr_ft=1e-4, lr_d=1e-4, wd=0.0, d_steps=1, ft_steps=1,
-        # InfoMax
-        im_T=1.0, im_weight=0.5, im_marg_w=1.0,
-        # Pseudo+LMMD
-        lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=35e-2, path=None,
+        path=None,
 ):
     # 1) Frozen source model (completely fixed F_s + C)
     src_model.eval()
@@ -160,25 +146,11 @@ def train_adda_infomax_lmmd(
 
     # 4) Training loop (alternating optimization of D and F_t)
     for epoch in range(num_epochs):
-        # Prepare pseudo-labels for LMMD
-        pl_loader = None
-        cached_gammas = None
-        pseudo_x = pseudo_y = pseudo_w = None
-        cov = margin_mean = 0.0
-        if epoch >= lmmd_start_epoch:
-            pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                tgt_model, target_loader, device, threshold=pseudo_thresh, T=T_lmmd
-            )
-            cov, margin_mean = stats["coverage"], stats["margin_mean"]
-            if pseudo_x.numel() > 0:
-                pl_ds = TensorDataset(pseudo_x, pseudo_y, pseudo_w)
-                pl_loader = DataLoader(pl_ds, batch_size=batch_size, shuffle=True)
-        lambda_mmd_eff = mmd_lambda(epoch, num_epochs, max_lambda=max_lambda, start_epoch=lmmd_start_epoch)
 
         it_src, it_tgt = iter(source_loader), iter(target_loader)
-        it_pl = iter(pl_loader) if pl_loader is not None else None
         len_src, len_tgt = len(source_loader), len(target_loader)
         steps = max(len_src, len_tgt)
+        # New iterator
         it_tgt_ft = iter(target_loader)
 
         tgt_model.train()
@@ -186,7 +158,7 @@ def train_adda_infomax_lmmd(
         D.train()
 
         # count
-        d_loss_sum = g_loss_sum = im_loss_sum = mmd_loss_sum = ft_loss_sum = 0.0
+        d_loss_sum = g_loss_sum = im_sum  = ft_loss_sum = 0.0
         d_acc_sum = 0.0
         d_cnt = 0
 
@@ -220,7 +192,7 @@ def train_adda_infomax_lmmd(
 
                 xt_last = xt.detach()
 
-                # record D acc
+                # 记录 D acc
                 with torch.no_grad():
                     pred = d_out.argmax(1)
                     d_acc = (pred == d_lab).float().mean().item()
@@ -248,34 +220,10 @@ def train_adda_infomax_lmmd(
                 g_out = D(f_t)
                 loss_g = c_dom(g_out, fool_lab)
 
-                # InfoMax
+                #proxy
+                im_sum, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=1, marg_weight=1)
 
-                loss_im, h_cond, h_marg = infomax_loss_from_logits(logits_t, T=im_T, marg_weight=im_marg_w)
-                loss_im = im_weight * loss_im
-
-                # LMMD：Use source tags and target pseudo tags for class conditional alignment.
-                if it_pl is not None:
-                    try:
-                        xpl, ypl, wpl = next(it_pl)
-                    except StopIteration:
-                        it_pl = iter(pl_loader)
-                        xpl, ypl, wpl = next(it_pl)
-                    xpl, ypl, wpl = xpl.to(device), ypl.to(device), wpl.to(device)
-                    _, _, f_s_n = src_model(xs)
-                    f_s_n = F.normalize(f_s_n, dim=1)
-                    _, _, f_t_pl = tgt_model(xpl)
-                    f_t_pl_n = F.normalize(f_t_pl, dim=1)
-                    if cached_gammas is None:
-                        cached_gammas = suggest_mmd_gammas(f_s_n.detach(), f_t_pl_n.detach())
-                    loss_lmmd = classwise_mmd_biased_weighted(
-                        f_s_n, ys, f_t_pl_n, ypl, wpl,
-                        num_classes=num_classes, gammas=cached_gammas, min_count_per_class=2
-                    )
-                    loss_lmmd = lambda_mmd_eff * loss_lmmd
-                else:
-                    loss_lmmd = f_t.new_tensor(0.0)
-
-                loss_ft = loss_g + loss_im + loss_lmmd
+                loss_ft = loss_g
                 opt_ft.zero_grad()
                 loss_ft.backward()
                 opt_ft.step()
@@ -284,8 +232,7 @@ def train_adda_infomax_lmmd(
                     return x.detach().item() if torch.is_tensor(x) else float(x)
 
                 g_loss_sum += to_scalar(loss_g)
-                im_loss_sum += to_scalar(loss_im)
-                mmd_loss_sum += to_scalar(loss_lmmd)
+                im_sum += im_sum
                 ft_loss_sum += to_scalar(loss_ft)
             for p in D.parameters():
                 p.requires_grad = True
@@ -296,17 +243,15 @@ def train_adda_infomax_lmmd(
             f"[ADDA] Ep {epoch + 1}/{num_epochs} | "
             f"D:{d_loss_sum / max(1, steps * d_steps):.4f} | "
             f"G(adver):{g_loss_sum / max(1, steps * ft_steps):.4f} | "
-            f"IM:{im_loss_sum / max(1, steps * ft_steps):.4f} | "
-            f"LMMD:{mmd_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"FT(total):{ft_loss_sum / max(1, steps * ft_steps):.4f} | "
             f"D-acc:{d_acc_sum / max(1, d_cnt):.4f} | "
-            f"cov:{cov:.2%} margin:{margin_mean:.3f} | lambda_mmd_eff:{float(lambda_mmd_eff):.4f}"
         )
-        scr = im_loss_sum / max(1, steps * ft_steps)
-        if epoch > 10:
+        scr = im_sum / max(1, steps * ft_steps)
+        if epoch > 5:
             if scr < best_loss:
                 best_loss = scr
                 best_state = copy.deepcopy(tgt_model.state_dict())
+
 
         if best_state is not None:
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -320,10 +265,10 @@ if __name__ == "__main__":
     with open("/content/github/configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     bs = 64
-    lr_pre = 0.0009494768641358269
-    wd_pre = 2.5e-4
-    lr = 0.0002495284051956634
-    wd = 6e-5
+    lr_pre = 0.0003892028751003466
+    wd_pre = 1.8964731349756634e-05
+    lr = 4.1545278223989315e-05
+    wd = 2.5998797192251337e-05
 
     num_layers = cfg['num_layers']
     ksz = cfg['kernel_size']
@@ -331,7 +276,7 @@ if __name__ == "__main__":
     num_epochs = 15
     pre_epochs = 15
 
-    files = [185,188,191,194,197]
+    files = [185, 188, 191, 194, 197]
     for file in files:
         src_path = '/content/datasets/DC_T197_RP.txt'
         tgt_path = '/content/datasets/HC_T{}_RP.txt'.format(file)
@@ -343,7 +288,7 @@ if __name__ == "__main__":
             print(f"\n========== RUN {run_id} (ADDA) ==========")
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-            # —— Phase 1: Building and training the source domain model Fs + C
+            # — Phase 1: Building and training the source domain model Fs + C
             src_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                       cnn_act='leakrelu', num_classes=10).to(device)
 
@@ -362,21 +307,17 @@ if __name__ == "__main__":
                                                    device,
                                                    num_epochs=pre_epochs, scheduler=scheduler_src,
                                                    save_path=f"/content/drive/MyDrive/Masterarbeit/ADDA/Model_Pre/HC_T{file}/RUN{run_id}.pth")
-            # —— Phase 2: Initialize the target encoder Ft (copied from Fs), train ADDA + IM +LMMD
+            # — Phase 2: Initialize the target encoder Ft (copied from Fs) and train ADDA
             tgt_model = Flexible_ADDA(num_layers=num_layers, start_channels=sc, kernel_size=ksz,
                                       cnn_act='leakrelu', num_classes=10).to(device)
             copy_encoder_params(src_model, tgt_model, device)
 
-            print("[INFO] ADDA stage (Ft vs D) + optional InfoMax ...")
+            print("[INFO] ADDA stage (Ft vs D) ...")
             tgt_model = train_adda_infomax_lmmd(
                 src_model, tgt_model, src_loader, tgt_loader, device,
-                num_epochs=num_epochs, num_classes=10, batch_size=bs,
+                num_epochs=num_epochs,
                 # Discriminator/Optimizer
-                lr_ft=lr, lr_d=lr * 0.3, wd=wd, d_steps=1, ft_steps=1,
-                # InfoMax
-                im_T=1.0, im_weight=0.8, im_marg_w=1.0,
-                # LMMD
-                lmmd_start_epoch=3, pseudo_thresh=0.95, T_lmmd=1.5, max_lambda=0.5,
+                lr_ft=lr, lr_d=lr * 2, wd=wd, d_steps=1, ft_steps=2,
                 path=f"/content/drive/MyDrive/Masterarbeit/ADDA/Model/HC_T{file}/RUN{run_id}.pth",
             )
 
