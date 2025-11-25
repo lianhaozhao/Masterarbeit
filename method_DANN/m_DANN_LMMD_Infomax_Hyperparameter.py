@@ -12,12 +12,11 @@ from utils.general_train_and_test import general_test_model
 from models.get_no_label_dataloader import get_dataloaders,get_pseudo_dataloaders
 import yaml
 from models.generate_pseudo_labels_with_LMMD import generate_pseudo_with_stats
-from models.MMD import classwise_mmd_biased_weighted,suggest_mmd_gammas
+from models.MMD import classwise_mmd_biased_weighted,suggest_mmd_gammas,infomax_loss_from_logits
 from collections import deque
 
 
 def adam_param_groups(model, weight_decay):
-    """对 BN/偏置不做 weight decay"""
     decay, no_decay = [], []
     for n, p in model.named_parameters():
         if not p.requires_grad: continue
@@ -29,58 +28,6 @@ def adam_param_groups(model, weight_decay):
         {"params": decay, "weight_decay": weight_decay},
         {"params": no_decay, "weight_decay": 0.0},
     ]
-# ------------------ InfoMax (target domain) ------------------
-@torch.no_grad()
-def _safe_mean_prob(p, eps=1e-8):
-    p = p.clamp_min(eps)
-    return p / p.sum(dim=1, keepdim=True)
-
-def entropy_mean(p, eps=1e-8):
-    # E_x[ H(p_x) ]
-    p = p.clamp_min(eps)
-    return (-p * p.log()).sum(dim=1).mean()
-
-def entropy_marginal(p, eps=1e-8):
-    # H( E_x[p_x] )
-    p_bar = p.mean(dim=0)
-    p_bar = p_bar.clamp_min(eps)
-    return -(p_bar * p_bar.log()).sum()
-
-def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
-    """
-        依据 “信息最大化” (InfoMax) 思想，从分类 logits 计算无监督正则项：
-        I(z; ŷ) = H(ŷ) - H(ŷ|z)。
-        训练中最小化的目标为：
-            L = H(ŷ|z) - w * H(ŷ)
-        其中 H(ŷ|z) 是条件熵（鼓励单样本预测更自信），H(ŷ) 是边际熵（鼓励整体类别使用均衡，防止塌缩）。
-
-        参数
-        ----
-        logits : Tensor
-            分类头输出的未归一化得分，形状 [B, C]。
-        T : float, 默认 1.0
-            Softmax 温度。T > 1 使分布变“软”（置信度下降），T < 1 使分布变“尖”（置信度上升）。
-            会同时影响条件熵与边际熵的数值。
-        marg_weight : float, 默认 1.0
-            边际熵权重 w。数值越大，越强烈地抑制“塌缩到单一类别”的解。
-            常见范围 0.5 ~ 2.0，可据验证集曲线调参。
-
-        返回
-        ----
-        loss : Tensor (标量，requires_grad=True)
-            最小化目标：H(ŷ|z) - w * H(ŷ)。用于反向传播。
-        h_cond_detached : Tensor (标量，no grad)
-            条件熵 H(ŷ|z) 的经验估计（E_x[-∑_c p(c|x) log p(c|x)]）。仅用于日志监控。
-        h_marg_detached : Tensor (标量，no grad)
-            边际熵 H(ŷ) 的经验估计，其中 ŷ 的边际分布为 p̄ = E_x[p(·|x)]。
-            数学形式：H(ŷ) = -∑_c p̄_c log p̄_c。仅用于日志监控。
-
-        """
-    # I(z;ŷ) = H(ŷ) - H(ŷ|z); minimiere  H(ŷ|z) - w * H(ŷ)
-    p = F.softmax(logits / T, dim=1)  # [B, C], Klassenwahrscheinlichkeiten pro Beispiel
-    h_cond = entropy_mean(p)  # Skalar, Schätzung der bedingten Entropie
-    h_marg = entropy_marginal(p)  # Schätzung der marginalen Entropie
-    return h_cond - marg_weight * h_marg, h_cond.detach(), h_marg.detach()
 
 # DANN Lambda Scheduling (GRL only)
 def dann_lambda(epoch, num_epochs, max_lambda=0.5):
@@ -96,7 +43,7 @@ def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
 
 # Training
 def train_dann_infomax_lmmd(model,
-                            source_loader, target_loader,ps_loader,
+                            source_loader, target_loader,
                             optimizer, criterion_cls, criterion_domain,
                             device, num_epochs=20, num_classes=10,
                             pseudo_thresh=0.95,
@@ -130,7 +77,7 @@ def train_dann_infomax_lmmd(model,
         cov = margin_mean = 0.0
         if epoch >= lmmd_start_epoch:
             pseudo_x, pseudo_y, pseudo_w, stats = generate_pseudo_with_stats(
-                model, ps_loader, device, threshold=pseudo_thresh, T=lmmd_t
+                model, target_loader, device, threshold=pseudo_thresh, T=lmmd_t
             )
             kept, total = stats["kept"], stats["total"]
             cov, margin_mean = stats["coverage"], stats["margin_mean"]
@@ -292,10 +239,10 @@ def train_dann_infomax_lmmd(model,
 
 
 
-# 只搜对抗专属超参
+# Search only for exclusive super parameters for combat
 def suggest_adv_only(trial):
     params = {
-        "batch_size":    trial.suggest_categorical("batch_size", [32, 64]),  # 可改成 [32, 48, 64]
+        "batch_size":    trial.suggest_categorical("batch_size", [32, 48, 64]),
         "learning_rate": trial.suggest_float("learning_rate",8e-5, 5e-4, log=True),
         "weight_decay":  trial.suggest_float("weight_decay", 8e-5, 3e-4, log=True),
         "grl_lambda_max":    trial.suggest_categorical("grl_lambda_max", [0.5]),
@@ -326,7 +273,7 @@ def infomax_unsup_score_from_loader(model, source_loader, target_loader, device,
     marginal_entropy = (-(p_bar * p_bar.log()).sum()).item()
     score = mean_entropy - marg_weight * marginal_entropy
 
-    # 域不可分性（gap 越小越好）
+    # Domain indivisibility (the smaller the gap, the better)
     tot, correct = 0, 0
     for (xs, _), xt in zip(source_loader, target_loader):
         xs, xt = xs.to(device), xt.to(device)
@@ -343,62 +290,79 @@ def infomax_unsup_score_from_loader(model, source_loader, target_loader, device,
 
 
 def objective_adv_only(trial,
-                       source_train='../datasets/source/train/DC_T197_RP.txt',
-                       source_val  ='../datasets/source/test/DC_T197_RP.txt',
-                       target_train='../datasets/target/train/HC_T185_RP.txt',
+                       dataset_configs=None,
                        out_dir     ='../datasets/info_optuna_dann',
+                       n_repeats=2,
                        ):
     with open("../configs/default.yaml", 'r') as f:
         cfg = yaml.safe_load(f)['DANN_LMMD_INFO']
     num_layers = cfg['num_layers']; ksz = cfg['kernel_size']; sc = cfg['start_channels']
-    num_epochs = 30
+    num_epochs = 40
     os.makedirs(out_dir, exist_ok=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     p = suggest_adv_only(trial)
+    # Accumulators for averaging
+    total_score = 0.0
+    total_gap = 0.0
+    n_eval = 0
 
-    # 数据（batch 固定）
-    src_tr, tgt_tr = get_dataloaders(source_train, target_train, batch_size=p["batch_size"])
-    ps_loader = get_pseudo_dataloaders(target_train, batch_size=p["batch_size"])
+    for dcfg in dataset_configs:
+        for _ in np.arange(n_repeats):
 
-    # 模型（结构固定）
-    model = Flexible_DANN(num_layers=num_layers,
-                          start_channels=sc,
-                          kernel_size=ksz,
-                          num_classes=10,
-                          lambda_=1).to(device)
-
-    optimizer = torch.optim.Adam( adam_param_groups(model, p["weight_decay"]), lr=p["learning_rate"], betas=(0.9, 0.999), eps=1e-8 )
-    # 调度器（Cosine；与训练轮数一致）
-    max_epochs = num_epochs
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=max_epochs, eta_min=p["learning_rate"] * 0.1
-    )
-    c_cls = nn.CrossEntropyLoss()
-    c_dom = nn.CrossEntropyLoss()
+           # data
+            src_tr, tgt_tr = get_dataloaders(
+                dcfg["source_train"], dcfg["target_train"],
+                batch_size=p["batch_size"]
+            )
 
 
-    model = train_dann_infomax_lmmd(model, src_tr, tgt_tr, ps_loader,
-                optimizer, c_cls, c_dom, device,
-                num_epochs=num_epochs,
-                pseudo_thresh=p["pseudo_thresh"],
-                scheduler=scheduler,batch_size=p["batch_size"],
-                # InfoMax Hyperparameters
-                im_T=p["im_T"], im_weight=p["im_weight"], im_marg_w=1.0,
-                grl_lambda_max=p["grl_lambda_max"],max_lambda=p["lmmd_lambda_max"],
-                lmmd_start_epoch=4,lmmd_t=p["lmmd_t"]
-                                       )
+            model = Flexible_DANN(num_layers=num_layers,
+                                  start_channels=sc,
+                                  kernel_size=ksz,
+                                  num_classes=10,
+                                  lambda_=1).to(device)
 
-    metrics = infomax_unsup_score_from_loader(model, src_tr, tgt_tr, device,
-                                              T=1.0, marg_weight=1.0)
+            optimizer = torch.optim.Adam( adam_param_groups(model, p["weight_decay"]), lr=p["learning_rate"], betas=(0.9, 0.999), eps=1e-8 )
+            # Scheduler (Cosine; same as the number of training epochs)
+            max_epochs = num_epochs
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=max_epochs, eta_min=p["learning_rate"] * 0.1
+            )
+            c_cls = nn.CrossEntropyLoss()
+            c_dom = nn.CrossEntropyLoss()
 
-    trial.set_user_attr("score", metrics["score"])
-    trial.set_user_attr("domain_gap", metrics["domain_gap"])
+
+            model = train_dann_infomax_lmmd(model, src_tr, tgt_tr,
+                        optimizer, c_cls, c_dom, device,
+                        num_epochs=num_epochs,
+                        pseudo_thresh=p["pseudo_thresh"],
+                        scheduler=scheduler,batch_size=p["batch_size"],
+                        # InfoMax Hyperparameters
+                        im_T=p["im_T"], im_weight=p["im_weight"], im_marg_w=1.0,
+                        grl_lambda_max=p["grl_lambda_max"],max_lambda=p["lmmd_lambda_max"],
+                        lmmd_start_epoch=4,lmmd_t=p["lmmd_t"]
+                                               )
+
+            metrics = infomax_unsup_score_from_loader(model, src_tr, tgt_tr, device,
+                                                      T=1.0, marg_weight=1.0)
+
+           # Accumulate for averaging
+            total_score += float(metrics["score"])
+            total_gap += float(metrics["domain_gap"])
+            n_eval += 1
+
+        # Avoid division by zero
+        mean_score = total_score / max(1, n_eval)
+        mean_gap = total_gap / max(1, n_eval)
+
+        trial.set_user_attr("score", mean_score)
+        trial.set_user_attr("domain_gap", mean_gap)
 
     print(f"[InfoMax] score={metrics['score']:.4f} | "
           f"gap={metrics['domain_gap']:.3f}")
 
-    # 记录 trial
+    # record trial
     rec = {
         "trial": trial.number, **p,
         "score": metrics["score"],
@@ -413,24 +377,34 @@ def objective_adv_only(trial,
     all_rec.append(rec)
     with open(path, "w") as f: json.dump(all_rec, f, indent=2)
 
-    # 2目标：最小化 InfoMax 分数 最小化 domain_gap
+    # 2. Objective: Minimize the InfoMax score and minimize the domain_gap.
     return float(metrics["score"]), float(metrics["domain_gap"])
 
 
-# ========= 主程序 =========
+# ========= main =========
 if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # 直接搜索对抗专属超参
+    # Direct search for dedicated hyperparameters for combat
     sampler = optuna.samplers.NSGAIISampler()
     study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
 
     study.optimize(lambda t: objective_adv_only(
         t,
-        source_train='../datasets/source/train/DC_T197_RP.txt',
-        source_val  ='../datasets/source/test/DC_T197_RP.txt',
-        target_train='../datasets/target/train/HC_T185_RP.txt',
+        [{
+            "target_train": "../datasets/HC_T191_RP.txt",
+            "source_train": "../datasets/DC_T197_RP.txt",
+        },
+            {
+                "target_train": "../datasets/HC_T194_RP.txt",
+                "source_train": "../datasets/DC_T197_RP.txt",
+            },
+            {
+                "target_train": "../datasets/HC_T185_RP.txt",
+                "source_train": "../datasets/DC_T197_RP.txt",
+            }],
+        n_repeats=2,
         out_dir     ='../datasets/info_optuna_dann',
     ), n_trials=50)
 
