@@ -59,7 +59,6 @@ def get_dataloaders(source_path, target_path, batch_size):
                         - target_loader: DataLoader of the target domain,
                           which returns x (without labels).
 
-
             """
     source_dataset = PKLDataset(txt_path=source_path)
     source_loader = DataLoader(source_dataset, batch_size=batch_size, shuffle=True)

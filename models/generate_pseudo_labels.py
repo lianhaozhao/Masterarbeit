@@ -68,7 +68,6 @@ def generate_soft_pseudo_labels(model, target_loader, device, threshold=0.9):
         model (nn.Module): Trained model for generating pseudo-labels.
         target_loader (DataLoader): Dataloader for unlabeled target domain data.
         threshold (float): Confidence threshold for accepting a pseudo-label.
-
     Returns:
         pseudo_data (Tensor): Inputs with confidence above threshold.
         pseudo_probs (Tensor): Corresponding soft labels (probability distributions).

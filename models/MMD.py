@@ -16,7 +16,6 @@ def _mk_kernel(a, b, gammas):
     K = torch.exp(-g * d2.unsqueeze(0))  # [G, m, n]
     return K.mean(dim=0)                 # [m, n]
 
-
 def _weighted_mean_kernel(K, w_row, w_col):
     # E_w[k] = (w_row^T K w_col) / (sum(w_row)*sum(w_col))
     num = (w_row.view(1,-1) @ K @ w_col.view(-1,1)).squeeze()
@@ -51,6 +50,52 @@ def mmd2_unconditional(feat_src, feat_tgt, gammas):
 def classwise_mmd_biased_weighted(feat_src, y_src, feat_tgt, y_tgt, w_tgt,
                                   num_classes, gammas=(0.5,1,2,4,8),
                                   min_count_per_class=2):
+    """
+        Compute class-wise, biased MMD^2 between source and target features with
+        importance weights on target samples.
+
+        For each class c, this function:
+          1. Selects source features feat_src[y_src == c] and target features
+             feat_tgt[y_tgt == c]
+          2. Uses the corresponding target weights w_tgt[y_tgt == c]
+          3. Computes a (biased) weighted MMD^2 between the two sets via
+             `mmd2_weighted`
+          4. Weights the class-specific MMD^2 by w = min(n_s, n_t), where n_s and
+             n_t are the sample counts of that class in source and target
+          5. Averages over all classes that satisfy the minimum sample requirement
+
+        Classes with too few samples in either domain (n_s < min_count_per_class
+        or n_t < min_count_per_class) are ignored.
+
+        Args
+        ----
+        feat_src : Tensor, shape [N_s, D]
+            Source-domain features.
+        y_src : LongTensor, shape [N_s]
+            Source-domain class labels in [0, num_classes - 1].
+        feat_tgt : Tensor, shape [N_t, D]
+            Target-domain features.
+        y_tgt : LongTensor, shape [N_t]
+            Target-domain class pseudo labels in [0, num_classes - 1].
+        w_tgt : Tensor, shape [N_t]
+            Importance weights for target samples. Only entries corresponding
+            to y_tgt == c are used for class c.
+        num_classes : int
+            Number of classes.
+        gammas : tuple of float, default (0.5, 1, 2, 4, 8)
+            Bandwidth parameters for the RBF kernels inside `mmd2_weighted`.
+            Multiple gammas correspond to a mixture of RBF kernels.
+        min_count_per_class : int, default 2
+            Minimum number of samples required in BOTH source and target for a
+            class to be included in the MMD computation.
+
+        Returns
+        -------
+        mmd_classwise : Tensor (scalar)
+            Class-wise, weighted average of biased MMD^2 over all eligible classes.
+            If no class satisfies the minimum sample requirement, returns 0.0
+            (as a tensor on the same device/dtype as feat_src).
+        """
     total = feat_src.new_tensor(0.0)
     wsum = 0.0
     for c in range(num_classes):
@@ -85,34 +130,41 @@ def entropy_marginal(p, eps=1e-8):
 
 def infomax_loss_from_logits(logits, T=1.0, marg_weight=1.0):
     """
-        依据 “信息最大化” (InfoMax) 思想，从分类 logits 计算无监督正则项：
-        I(z; ŷ) = H(ŷ) - H(ŷ|z)。
-        训练中最小化的目标为：
-            L = H(ŷ|z) - w * H(ŷ)
-        其中 H(ŷ|z) 是条件熵（鼓励单样本预测更自信），H(ŷ) 是边际熵（鼓励整体类别使用均衡，防止塌缩）。
+    Compute an unsupervised regularization term from classification logits
+    based on the “information maximization” (InfoMax) principle:
+    I(z; ŷ) = H(ŷ) - H(ŷ|z).
+    During training we minimize:
+        L = H(ŷ|z) - w * H(ŷ)
+    where H(ŷ|z) is the conditional entropy (encourages confident per-sample
+    predictions) and H(ŷ) is the marginal entropy (encourages balanced usage
+    of classes and prevents collapse).
 
-        参数
-        ----
-        logits : Tensor
-            分类头输出的未归一化得分，形状 [B, C]。
-        T : float, 默认 1.0
-            Softmax 温度。T > 1 使分布变“软”（置信度下降），T < 1 使分布变“尖”（置信度上升）。
-            会同时影响条件熵与边际熵的数值。
-        marg_weight : float, 默认 1.0
-            边际熵权重 w。数值越大，越强烈地抑制“塌缩到单一类别”的解。
-            常见范围 0.5 ~ 2.0，可据验证集曲线调参。
+    Parameters
+    ----------
+    logits : Tensor
+        Unnormalized scores from the classification head, of shape [B, C].
+    T : float, default 1.0
+        Softmax temperature. T > 1 makes the distribution “softer”
+        (lower confidence), T < 1 makes it “sharper” (higher confidence).
+        This affects both the conditional and marginal entropy values.
+    marg_weight : float, default 1.0
+        Weight w for the marginal entropy term. Larger values more strongly
+        penalize solutions that collapse to a single class.
+        A typical range is 0.5 ~ 2.0, to be tuned based on validation curves.
 
-        返回
-        ----
-        loss : Tensor (标量，requires_grad=True)
-            最小化目标：H(ŷ|z) - w * H(ŷ)。用于反向传播。
-        h_cond_detached : Tensor (标量，no grad)
-            条件熵 H(ŷ|z) 的经验估计（E_x[-∑_c p(c|x) log p(c|x)]）。仅用于日志监控。
-        h_marg_detached : Tensor (标量，no grad)
-            边际熵 H(ŷ) 的经验估计，其中 ŷ 的边际分布为 p̄ = E_x[p(·|x)]。
-            数学形式：H(ŷ) = -∑_c p̄_c log p̄_c。仅用于日志监控。
+    Returns
+    -------
+    loss : Tensor (scalar, requires_grad=True)
+        The objective to minimize: H(ŷ|z) - w * H(ŷ), used for backpropagation.
+    h_cond_detached : Tensor (scalar, no grad)
+        Empirical estimate of the conditional entropy H(ŷ|z),
+        i.e., E_x[-∑_c p(c|x) log p(c|x)]. For logging/monitoring only.
+    h_marg_detached : Tensor (scalar, no grad)
+        Empirical estimate of the marginal entropy H(ŷ), where the marginal
+        distribution of ŷ is p̄ = E_x[p(·|x)].
+        Formally: H(ŷ) = -∑_c p̄_c log p̄_c. For logging/monitoring only.
+"""
 
-        """
     # I(z;ŷ) = H(ŷ) - H(ŷ|z); minimiere  H(ŷ|z) - w * H(ŷ)
     p = F.softmax(logits / T, dim=1)  # [B, C], Klassenwahrscheinlichkeiten pro Beispiel
     h_cond = entropy_mean(p)  # Skalar, Schätzung der bedingten Entropie
@@ -163,19 +215,17 @@ class MultiPrototypes(nn.Module):
     def update(self, feats, labels, weights=None):
         if feats.numel() == 0:
             return
-        device = feats.device  # 保持和输入特征一致
+        device = feats.device  # Maintain consistency with input features
         for c in labels.unique():
             mask = (labels == c)
             if mask.sum() == 0: continue
             vec = feats[mask].mean(dim=0)
 
-            # 确保 proto 在同一个 device
             proto_c = self.proto[c].to(device)
 
             sims = F.cosine_similarity(proto_c, vec.unsqueeze(0), dim=1)  # [K]
             k = sims.argmax().item()
 
-            # 更新时也要保持 device 一致
             self.proto[c, k] = (
                     self.m * self.proto[c, k].to(device) + (1 - self.m) * vec
             )
@@ -195,7 +245,7 @@ class MultiPrototypes(nn.Module):
         # reshape -> [N, C, K]
         logits_all = logits_all.view(feats.size(0), self.num_classes, self.num_protos)
 
-        # 聚合
+        # aggregation
         if agg == "max":
             logits = logits_all.max(dim=2).values
         elif agg == "mean":

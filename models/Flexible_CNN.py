@@ -10,7 +10,6 @@ class Flexible_CNN_FeatureExtractor(nn.Module):
        A flexible 1D CNN feature extractor for time-series or signal data.
 
        Automatically adjusts output feature dimension based on input length.
-
        Args:
            num_layers (int): Number of convolutional layers.
            start_channels (int): Number of channels in the first conv layer.
@@ -140,7 +139,7 @@ def freeze_feature_train_head(model, lr, weight_decay):
 
         Returns:
             torch.optim.Optimizer: Optimizer for the classifier parameters only.
-        """
+    """
     for param in model.feature_extractor.parameters():
         param.requires_grad = False
     model.feature_extractor.eval()

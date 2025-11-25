@@ -4,7 +4,7 @@ import math, numpy as np
 import torch.nn.functional as F
 from sklearn.cluster import KMeans
 
-# 伪标签 + 统计
+# Pseudo-tags + statistics
 @torch.no_grad()
 def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1.0):
     """
@@ -95,13 +95,15 @@ def generate_pseudo_with_stats(model, target_loader, device, threshold=0.95, T=1
                                  "coverage": cov, "margin_mean": margin_mean}
 
 
-# ========== 1) 提取“全部目标样本”的特征 + 伪标签  ==========
+# ========== 1) Extract features from "all target samples" + pseudo-labels  ==========
 @torch.no_grad()
 def extract_all_target_feats_and_pseudo(model, target_loader, device, T=1.0, normalize=True, keep_inputs=True):
     """
-    对 target_loader 中的所有样本：提取 features、伪标签 y_hat、最大置信度 p_max，
-    并（可选）缓存原始输入 x（CPU），以便后续按索引切出 pseudo_x。
-    注意：这是对“全部样本”做的（不带阈值筛）。
+    For all samples in `target_loader`: extract features, pseudo-label `y_hat`, and maximum confidence `p_max`,
+
+    and (optionally) cache the raw input `x` (CPU) for later indexing of `pseudo_x`.
+
+    Note: This is done on "all samples" (without thresholding).
     """
     model.eval()
     xs, feats, y_hat, p_max = [], [], [], []

@@ -3,6 +3,26 @@ import torch.nn as nn
 from models.Flexible_CNN import Flexible_CNN_FeatureExtractor, Flexible_CNN_Classifier
 
 class GradientReversalFunction(torch.autograd.Function):
+    """
+        Autograd function implementing a Gradient Reversal Layer (GRL).
+
+        Forward:
+            Returns the input tensor unchanged.
+
+        Backward:
+            Multiplies the incoming gradient by -lambda_, effectively reversing
+            and scaling the gradient. This is typically used in domain-adversarial
+            training (e.g., DANN) to encourage domain-invariant features.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input feature tensor.
+        lambda_ : float
+            Gradient reversal coefficient. Common practice is to schedule this
+            value from 0 to some maximum (e.g., 0.5 or 1.0) over the course of
+            training.
+    """
     @staticmethod
     def forward(ctx, x, lambda_):
         ctx.lambda_ = lambda_
@@ -14,9 +34,53 @@ class GradientReversalFunction(torch.autograd.Function):
 
 
 def grad_reverse(x, lambda_=1.0):
+    """
+        Convenience wrapper for applying the Gradient Reversal Layer (GRL).
+
+        Parameters
+        ----------
+        x : Tensor
+            Input feature tensor.
+        lambda_ : float, default 1.0
+            Gradient reversal coefficient that scales the reversed gradient.
+
+        Returns
+        -------
+        Tensor
+            Tensor with identical forward values as x, but with gradients
+            multiplied by -lambda_ during backpropagation.
+    """
     return GradientReversalFunction.apply(x, lambda_)
 
 class DomainClassifier(nn.Module):
+    """
+        A simple MLP-based domain discriminator for domain-adversarial training.
+
+        This module receives feature vectors (optionally after a GRL) and predicts
+        domain labels (e.g., source vs target), providing an adversarial signal to
+        the shared feature extractor.
+
+        Parameters
+        ----------
+        feature_dim : int
+            Dimensionality of the input feature vector.
+        hidden : int, default 256
+            Size of the hidden layer.
+        domain_dropout : float, default 0.2
+            Dropout rate applied to the hidden representation for regularization.
+        num_domains : int, default 2
+            Number of domain classes (e.g., 2 for source and target).
+
+        Forward
+        -------
+        x : Tensor, shape [B, feature_dim]
+            Input features.
+
+        Returns
+        -------
+        Tensor
+            Domain logits of shape [B, num_domains], suitable for CrossEntropyLoss.
+    """
     def __init__(self, feature_dim, hidden=256, domain_dropout=0.2, num_domains=2):
         super().__init__()
         self.net = nn.Sequential(
@@ -31,6 +95,52 @@ class DomainClassifier(nn.Module):
 
 
 class Flexible_DANN(nn.Module):
+    """
+    Flexible_DANN
+
+    A configurable DANN-style (Domain-Adversarial Neural Network) model
+    built on top of a CNN feature extractor. It includes:
+      - feature_extractor: shared CNN backbone producing flattened features
+      - classifier:        task classifier head for label prediction
+      - domain_classifier: domain discriminator (with optional GRL in front)
+      - feature_reducer:   projection of features into a lower-dimensional
+                           space (e.g., for additional losses or analysis)
+
+    Parameters
+    ----------
+    num_layers : int, default 2
+        Number of convolutional blocks in the CNN feature extractor.
+    start_channels : int, default 8
+        Number of channels in the first convolutional layer.
+    kernel_size : int, default 3
+        Convolution kernel size in the feature extractor.
+    cnn_act : str, default 'leakrelu'
+        Activation used in the CNN feature extractor.
+    num_classes : int, default 10
+        Number of label classes for the task classifier.
+    lambda_ : float, default 1.0
+        Initial coefficient for the Gradient Reversal Layer. This value can
+        be updated externally (e.g., by a scheduling function) during training.
+
+    Forward
+    -------
+    x : Tensor
+        Input batch, shape determined by Flexible_CNN_FeatureExtractor.
+    grl : bool, default True
+        If True, applies gradient reversal before the domain classifier.
+        If False, passes features directly to the domain classifier.
+
+    Returns
+    -------
+    class_outputs : Tensor
+        Class logits of shape [B, num_classes].
+    domain_outputs : Tensor
+        Domain logits of shape [B, num_domains].
+    reduced_features : Tensor
+        Reduced feature representation of shape [B, 256], produced by
+        feature_reducer, useful for downstream metrics or additional
+        alignment losses.
+    """
     def __init__(self, num_layers=2, start_channels=8, kernel_size=3,
                  cnn_act='leakrelu', num_classes=10, lambda_=1.0):
         super().__init__()

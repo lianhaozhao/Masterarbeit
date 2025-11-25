@@ -79,7 +79,6 @@ class Flexible_CNN_Classifier(nn.Module):
             nn.LeakyReLU(0.01, inplace=True),
             nn.Dropout(p)
         )
-
         # Weights of the cosine classifier
         self.weight = nn.Parameter(torch.Tensor(num_classes, hidden))
         nn.init.xavier_normal_(self.weight)  # 初始化
