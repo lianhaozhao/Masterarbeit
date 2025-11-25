@@ -55,9 +55,6 @@ def adam_param_groups(model, wd):
         {"params": no_decay, "weight_decay": 0.0},
     ]
 
-
-
-
 with open("../configs/default.yaml", 'r') as f:
     config = yaml.safe_load(f)['DANN_LMMD_INFO']
 # Extract parameters
