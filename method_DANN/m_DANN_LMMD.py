@@ -27,7 +27,6 @@ def mmd_lambda(epoch, num_epochs, max_lambda=1e-1, start_epoch=5):
     return (2.0 / (1.0 + np.exp(-3 * p)) - 1.0) * max_lambda
 
 def adam_param_groups(model, weight_decay):
-    """对 BN/偏置不做 weight decay"""
     decay, no_decay = [], []
     for n, p in model.named_parameters():
         if not p.requires_grad: continue
@@ -248,7 +247,6 @@ if __name__ == "__main__":
     sc = cfg['start_channels']
     num_epochs = 40
 
-    # files = [185]
     files = [185, 188, 191, 194, 197]
     for file in files:
 
@@ -274,7 +272,7 @@ if __name__ == "__main__":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=lr*0.1)
             c_cls = nn.CrossEntropyLoss(); c_dom = nn.CrossEntropyLoss()
 
-            print("[INFO] Starting DANN + (quality-gated) LMMD ...")
+            print("[INFO] Starting DANN + LMMD ...")
             model = train_dann_lmmd(
                 model, src_loader, tgt_loader,ps_loader,
                 optimizer, c_cls, c_dom, device,

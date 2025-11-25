@@ -23,7 +23,7 @@ def adam_param_groups(model, weight_decay):
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        # 对于一维参数（例如 LN/BN 的权重 γ、bias），不加 weight decay
+        #  norm weights & biases: no weight decay
         if param.ndim == 1 or name.endswith(".bias"):
             no_decay.append(param)
         else:
@@ -35,7 +35,7 @@ def adam_param_groups(model, weight_decay):
 
 def dann_lambda(epoch, num_epochs,max_lambda = 1):
     """
-    Common DANN λ schedule: smoothly increases from 0 to 0.6
+    Common DANN λ schedule: smoothly increases from 0 to max_lambda
 
     """
     p = epoch / max(1, num_epochs - 1)
@@ -43,10 +43,18 @@ def dann_lambda(epoch, num_epochs,max_lambda = 1):
 
 def train_dann(model, source_loader, target_loader,
                optimizer, criterion_cls, criterion_domain,
-               device, num_epochs=20, dann_lambda=dann_lambda,scheduler = None):
+               device, num_epochs=20, dann_lambda=dann_lambda,scheduler = None,
+               save_dir = None):
     best_gap = 0.5
     best_model_state = None
     patience = 0
+    # ==== Create save directory ====
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        first_path = os.path.join(save_dir, f"first.pth")
+        final_path = os.path.join(save_dir, f"final.pth")
+    else:
+        first_path = final_path = None
     for epoch in range(num_epochs):
         cls_loss_sum, dom_loss_sum, total_loss_sum = 0.0, 0.0, 0.0
         total_cls_samples, total_dom_samples = 0, 0
@@ -62,14 +70,14 @@ def train_dann(model, source_loader, target_loader,
             _, dom_out_tgt = model(tgt_x)
             loss_cls = criterion_cls(cls_out_src, src_y)
 
-            # 域分类损失（DANN）
+            # Domain classification loss（DANN）
             dom_label_src = torch.zeros(src_x.size(0), dtype=torch.long, device=device)
             dom_label_tgt = torch.ones(tgt_x.size(0), dtype=torch.long, device=device)
             bs_src, bs_tgt = src_x.size(0), tgt_x.size(0)
             loss_dom_src = criterion_domain(dom_out_src, dom_label_src)
             loss_dom_tgt = criterion_domain(dom_out_tgt, dom_label_tgt)
 
-            # 样本数加权的“单个域损失均值”
+            # Sample size-weighted "single-domain loss mean"
             loss_dom = (loss_dom_src * bs_src + loss_dom_tgt * bs_tgt) / (bs_src + bs_tgt)
 
             dom_preds_src = torch.argmax(dom_out_src, dim=1)
@@ -95,7 +103,7 @@ def train_dann(model, source_loader, target_loader,
         avg_dom_loss = dom_loss_sum / total_dom_samples
         avg_total_loss = total_loss_sum / total_dom_samples
 
-        # 域分类准确率（整轮）
+        # Domain classification accuracy (full round)
         dom_acc = dom_correct / dom_total
         gap = abs(dom_acc - 0.5)
 
@@ -105,6 +113,9 @@ def train_dann(model, source_loader, target_loader,
         print(f"[Epoch {epoch + 1}] Total Loss: {avg_total_loss:.4f} | "
               f"Cls loss: {avg_cls_loss:.4f} | Dom loss: {avg_dom_loss:.4f} | "
               f"DomAcc: {dom_acc:.4f}")
+        if epoch == 0 and first_path is not None:
+            torch.save(model.state_dict(), first_path)
+            print(f"[SAVE] First epoch model saved: {first_path}")
 
 
         if gap < 0.05 and avg_cls_loss < 0.05 and epoch > 10:
@@ -121,14 +132,13 @@ def train_dann(model, source_loader, target_loader,
         else:
             patience = 0
             best_gap = gap
-        # print("[INFO] Evaluating on target test set...")
-        # target_test_path = '../datasets/target/test/HC_T185_RP.txt'
-        # test_dataset = PKLDataset(target_test_path)
-        # test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        # general_test_model(model, criterion_cls, test_loader, device)
 
     if best_model_state is not None:
         model.load_state_dict(best_model_state)
+
+    if final_path is not None:
+        torch.save(model.state_dict(), final_path)
+        print(f"[SAVE] Final model saved: {final_path}")
 
     return model
 
@@ -143,22 +153,20 @@ if __name__ == '__main__':
     num_layers = config['num_layers']
     kernel_size = config['kernel_size']
     start_channels = config['start_channels']
-    num_epochs = 20
+    num_epochs = 30
 
     files = [185, 188, 191, 194, 197]
     for file in files:
 
-        source_path= '../datasets/source/train/DC_T197_RP.txt'
-        target_path = '../datasets/target/train/HC_T{}_RP.txt'.format(file)
-        target_test_path = '../datasets/target/test/HC_T{}_RP.txt'.format(file)
-        out_path = 'model'
-        os.makedirs(out_path, exist_ok=True)
+        source_path= '../datasets/DC_T197_RP.txt'
+        target_path = '../datasets/HC_T{}_RP.txt'.format(file)
+        target_test_path = '../datasets/HC_T{}_RP.txt'.format(file)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         print(f"[INFO] Loading HC_T{file} ...")
 
-        for run_id in range(5):
+        for run_id in range(10):
 
             model = Flexible_DANN(num_layers=num_layers,
                                   start_channels=start_channels,
@@ -182,7 +190,8 @@ if __name__ == '__main__':
             print("[INFO] Starting standard DANN training (no pseudo labels)...")
             model=train_dann(model, source_loader, target_loader,
                        optimizer, criterion_cls, criterion_domain,
-                       device, num_epochs=num_epochs, dann_lambda=dann_lambda,scheduler=scheduler)
+                       device, num_epochs=num_epochs, dann_lambda=dann_lambda,scheduler=scheduler,
+                       save_dir=f"/content/drive/MyDrive/Masterarbeit/DANN/Model/HC_T{file}_Run{run_id}")
 
             print("[INFO] Evaluating on target test set...")
             test_dataset = PKLDataset(target_path)
@@ -192,4 +201,3 @@ if __name__ == '__main__':
             del model, optimizer, scheduler, source_loader, target_loader, test_loader, test_dataset
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-
