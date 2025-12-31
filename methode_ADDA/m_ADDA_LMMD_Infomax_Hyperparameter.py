@@ -634,7 +634,7 @@ def objective_adv_only(trial,
                 lr=p["learning_rate_pre"], betas=(0.9, 0.999), eps=1e-8
             )
             scheduler_src = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer_src, T_max=5, eta_min=p["learning_rate_pre"] * 0.1
+                optimizer_src, T_max=15, eta_min=p["learning_rate_pre"] * 0.1
             )
             src_cls = nn.CrossEntropyLoss()
 
@@ -656,7 +656,7 @@ def objective_adv_only(trial,
                 num_epochs=num_epochs, num_classes=10, batch_size=p['batch_size'],
                 # Discriminator/Optimizer
                 lr_ft=p["learning_rate"], lr_d=p["learning_rate"] * 0.5,
-                wd=p["weight_decay"], d_steps=1, ft_steps=2,
+                wd=p["weight_decay"], d_steps=1, ft_steps=1,
                 # InfoMax
                 im_T=1.0, im_weight=0.8, im_marg_w=1.0,
                 # Pseudo+LMMD
