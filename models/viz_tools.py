@@ -239,12 +239,7 @@ def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
     """生成 t-SNE / PCA / 类中心热图 并返回统计指标"""
     ensure_dir(out_dir)
     feat_s, y_s, _  = collect_feats(src_model, src_loader, device, get_label=True,  pred_T=pred_T)
-    feat_t, y_t, w  = collect_feats(tgt_model, tgt_loader, device, get_label=False, pred_T=pred_T)
-
-    if conf_filter_quantile is not None:
-        q = np.quantile(w, conf_filter_quantile)
-        keep = (w >= q)
-        feat_t, y_t, w = feat_t[keep], y_t[keep], w[keep]
+    feat_t, y_t, _  = collect_feats(tgt_model, tgt_loader, device, get_label=True, pred_T=pred_T)
 
     plot_tsne_pca(feat_s, y_s, feat_t, y_t,
                   os.path.join(out_dir, f"{epoch_tag}_vis.png"),
