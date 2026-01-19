@@ -250,11 +250,6 @@ def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
                   os.path.join(out_dir, f"{epoch_tag}_vis.png"),
                   title_prefix=epoch_tag)
 
-    # diag = plot_class_center_heatmap(
-    #     feat_s, y_s, feat_t, y_t, num_classes,
-    #     os.path.join(out_dir, f"{epoch_tag}_center_heatmap.png"),
-    #     title=f"{epoch_tag} | Center Dist (1-cos)"
-    # )
 
     p2 = PCA(n_components=2)
     js = js_divergence_2d(p2.fit_transform(feat_s), p2.transform(feat_t), bins=80)
