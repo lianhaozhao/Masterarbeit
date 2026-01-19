@@ -111,8 +111,8 @@ def js_divergence_2d(a: np.ndarray, b: np.ndarray, bins: int = 80) -> float:
 # =========================
 # 可视化函数
 # =========================
-def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
-    """绘制 t-SNE 和 PCA 可视化图（标准化版，无平衡采样）"""
+def plot_pca_only(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
+    """仅绘制 PCA 可视化图（标准化版）"""
     # 标准化特征，防止高方差维度主导
     scaler = StandardScaler()
     feat_s = scaler.fit_transform(feat_s)
@@ -120,29 +120,23 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
 
     cmap = corporate_palette_10()
 
-    # PCA → t-SNE
-    pca50 = PCA(n_components=min(50, feat_s.shape[1]))
-    z_s = pca50.fit_transform(feat_s)
-    z_t = pca50.transform(feat_t)
+    # ---------- PCA 图 ----------
+    p2 = PCA(n_components=2)
+    zs = p2.fit_transform(feat_s)
+    zt = p2.transform(feat_t)
 
-    tsne = TSNE(n_components=2, init="pca", learning_rate="auto",
-                perplexity=30, max_iter=1000)
-    z = tsne.fit_transform(np.vstack([z_s, z_t]))
-    ns = z_s.shape[0]
-    z_s2, z_t2 = z[:ns], z[ns:]
-
-    # ---------- t-SNE 图 ----------
     plt.figure(figsize=(9, 7))
-    plt.scatter(z_s2[:, 0], z_s2[:, 1],
+    plt.scatter(zs[:, 0], zs[:, 1],
                 s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.35, marker='o', label="Quelle", edgecolors='none')
-    plt.scatter(z_t2[:, 0], z_t2[:, 1],
-                s=30, c=y_t, cmap=cmap, vmin=0, vmax=9,
+    plt.scatter(zt[:, 0], zt[:, 1],
+                s=35, c=y_t, cmap=cmap, vmin=0, vmax=9,
                 alpha=0.65, marker='^', label="Ziel", edgecolors='black', linewidths=0.003)
+
     ax = plt.gca()
     ax.tick_params(axis='both', which='both',
-                   labelbottom=False,  # 不显示 x 轴数字
-                   labelleft=False)  # 不显示 y 轴数字
+                   labelbottom=False,
+                   labelleft=False)
 
     present = np.unique(np.concatenate([y_s, y_t]).astype(int))
     class_handles = [
@@ -157,42 +151,13 @@ def plot_tsne_pca(feat_s, y_s, feat_t, y_t, save_path, title_prefix="epoch"):
                    label='Ziel ', markersize=8, alpha=0.9)
     ]
 
-    legend = plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
-               fontsize=10, loc='best', title="Domänen & Klassen")
+    legend = plt.legend(handles=domain_handles + class_handles,
+                        frameon=True, ncol=4, fontsize=10,
+                        loc='best', title="Domänen & Klassen")
     legend.get_title().set_fontweight('bold')
-
-    # 图例条目文字加粗
     for text in legend.get_texts():
         text.set_fontweight('bold')
-    plt.tight_layout()
-    plt.savefig(save_path.replace(".png", "_tsne.pdf"),
-                bbox_inches="tight", pad_inches=0.02)
-    plt.close()
 
-    # ---------- PCA 图 ----------
-    p2 = PCA(n_components=2)
-    zs = p2.fit_transform(feat_s)
-    zt = p2.transform(feat_t)
-
-    plt.figure(figsize=(9, 7))
-    plt.scatter(zs[:, 0], zs[:, 1],
-                s=25, c=y_s, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.35, marker='o', label="Quelle", edgecolors='none')
-    plt.scatter(zt[:, 0], zt[:, 1],
-                s=35, c=y_t, cmap=cmap, vmin=0, vmax=9,
-                alpha=0.65, marker='^', label="Ziel", edgecolors='black', linewidths=0.003)
-    ax = plt.gca()
-    ax.tick_params(axis='both', which='both',
-                   labelbottom=False,  # 不显示 x 轴数字
-                   labelleft=False)  # 不显示 y 轴数字
-
-    legend = plt.legend(handles=domain_handles + class_handles, frameon=True, ncol=4,
-               fontsize=10, loc='best', title="Domänen & Klassen")
-    legend.get_title().set_fontweight('bold')
-
-    # 图例条目文字加粗
-    for text in legend.get_texts():
-        text.set_fontweight('bold')
     plt.tight_layout()
     plt.savefig(save_path.replace(".png", "_pca.pdf"),
                 bbox_inches="tight", pad_inches=0.02)
@@ -236,16 +201,19 @@ def plot_class_center_heatmap(feat_s, y_s, feat_t, y_t, num_classes, save_path, 
 def visualize_epoch(src_model, tgt_model, src_loader, tgt_loader,
                     device, num_classes: int, out_dir: str, epoch_tag: str,
                     pred_T: float = 1.0, conf_filter_quantile: float | None = None):
-    """生成 t-SNE / PCA / 类中心热图 并返回统计指标"""
+    """仅生成 PCA 可视化，并返回统计指标（目标域使用真实标签，不做伪标签过滤）"""
     ensure_dir(out_dir)
-    feat_s, y_s, _  = collect_feats(src_model, src_loader, device, get_label=True,  pred_T=pred_T)
-    feat_t, y_t, _  = collect_feats(tgt_model, tgt_loader, device, get_label=True, pred_T=pred_T)
 
-    plot_tsne_pca(feat_s, y_s, feat_t, y_t,
-                  os.path.join(out_dir, f"{epoch_tag}_vis.png"),
-                  title_prefix=epoch_tag)
+    feat_s, y_s, _ = collect_feats(src_model, src_loader, device, get_label=True, pred_T=pred_T)
+    feat_t, y_t, _ = collect_feats(tgt_model, tgt_loader, device, get_label=True, pred_T=pred_T)
 
+    plot_pca_only(
+        feat_s, y_s, feat_t, y_t,
+        os.path.join(out_dir, f"{epoch_tag}_vis.png"),
+        title_prefix=epoch_tag
+    )
 
+    # JS 仍然基于 PCA(2D) 计算
     p2 = PCA(n_components=2)
     js = js_divergence_2d(p2.fit_transform(feat_s), p2.transform(feat_t), bins=80)
     return {"center_diag": 2, "js2d": float(js)}
